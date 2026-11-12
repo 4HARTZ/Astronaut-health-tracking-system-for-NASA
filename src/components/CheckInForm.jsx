@@ -26,11 +26,11 @@ export default function CheckInForm({ entry, disabled, onSave, onCancel, message
   if(step===2){try{setReview(readRecord());}catch(error){setMessage(error.message);return;}}
   move(step+1);
  }
- function submit(event){
+ async function submit(event){
   event.preventDefault();if(disabled)return;
   if(!editing&&step<3){advance();return;}
   if(editing&&!formRef.current.reportValidity())return;
-  try{onSave(readRecord());}catch(error){setMessage(error.message);}
+  try{await onSave(readRecord());}catch(error){setMessage(error.message);}
  }
  function fields(names){return <div className="measurement-fields">{definitions.filter(([name])=>names.includes(name)).map(([name,label,unit,min,max,increment])=><label key={name}>{label} · {unit}
   {ratings[name]?<select name={name} defaultValue={entry?.[name]??''}><option value="">Not recorded</option>{ratings[name].map((text,i)=><option key={text} value={i+1}>{i+1} · {text}</option>)}</select>:<input name={name} type="number" min={min} max={max} step={increment} inputMode="decimal" defaultValue={entry?.[name]??''}/>}</label>)}</div>;}
