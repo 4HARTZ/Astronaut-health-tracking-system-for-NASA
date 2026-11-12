@@ -7,6 +7,7 @@ import CheckInForm from './components/CheckInForm.jsx';
 import MetricCards from './components/MetricCards.jsx';
 import TrendChart from './components/TrendChart.jsx';
 import ChangesPanel from './components/ChangesPanel.jsx';
+import HealthReport from './components/HealthReport.jsx';
 import RecordHistory from './components/RecordHistory.jsx';
 
 export default function App(){
@@ -51,5 +52,6 @@ export default function App(){
  <PwaStatus/><DailyChecklist entries={entries}/><MetricCards entries={entries}/><div className="workspace"><>{saved?<SavedResults entry={saved} onEdit={edit} onNew={()=>{setSaved(null);resetForm();setMessage('');}}/>:<CheckInForm key={formVersion} entry={editing} disabled={disabled} onSave={save} onCancel={()=>{resetForm();setMessage('Edit cancelled.');}} message={message} setMessage={setMessage}/>}</><div id="trends"><TrendChart entries={entries}/><ChangesPanel entries={entries}/>
  <section className="panel info"><h2>Understand your data</h2><p>Heart rate and blood pressure offer cardiovascular context. Sleep, mood, and stress help you reflect on wellbeing.</p><p>Basic readings cannot measure bone density, radiation exposure, or immune function. These require dedicated assessments.</p><a href="https://www.nasa.gov/hrp/risks/" target="_blank" rel="noopener noreferrer">Explore NASA’s health research ↗</a></section></div></div>
  <RecordHistory entries={entries} disabled={disabled} onEdit={edit} onDelete={remove} onImport={importRecords} message={recordMessage}/>
+ <HealthReport entries={entries}/>
  </main><footer>Built by 4HARTZ · Early prototype · No medical alert system configured</footer></>;
 }

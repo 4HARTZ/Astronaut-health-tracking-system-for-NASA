@@ -88,3 +88,11 @@ New builds install in the background. **Update ready — reload** asks you to fi
 5. Restart preview to receive updates. Finish any draft before applying them.
 
 For development after testing offline: open browser DevTools → Application → Service Workers and unregister Orbit's worker, then start `npm run dev`. Avoid **Clear site data**, which also deletes health records. The existing production worker can otherwise keep serving its cached release instead of your development code.
+
+## Readable health reports
+
+Use **Health report** below the history, or **Prepare report** after saving a check-in. Select an inclusive local date range and optional context. Add an optional crew/report label and decide whether symptom notes should be included. Preview shows measurement coverage, missing counts, latest available values with dates/context, same-context changes, and full dated records.
+
+Select **Print / Save as PDF** to open the browser print dialog. Choose a printer or Save as PDF. The print stylesheet includes only the report. Review the destination and contents before printing or sharing. The app does not upload, email, or store the generated report separately. Backups and reports have different purposes: JSON backups can be reimported; printed reports cannot.
+
+Reports are snapshots of saved records at preview time. Generate a fresh preview after edits or new records. Unsaved drafts are excluded. All dates use the device timezone, which is printed on the report. Missing values remain unknown; comparisons are descriptive and are not diagnoses or fitness assessments. Print/PDF support depends on the browser; the embedded preview may not expose printing.
