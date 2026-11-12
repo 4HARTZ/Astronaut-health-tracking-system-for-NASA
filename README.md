@@ -46,7 +46,7 @@ Charts filter by inclusive local dates and measurement context and show up to 10
 
 This is a prototype, not a medical device. Entry limits are not clinical thresholds. There are no diagnoses, treatment recommendations, health scores, medical alerts, or baseline assessments. Future medical rules require qualified mission medical review. Basic readings cannot assess bone density, radiation dose, or immune function.
 
-Records remain unencrypted in browser localStorage. Use synthetic data in development. There is no authentication, backend, cloud synchronization, or production security. Clearing browser data removes records. The app uses no external runtime assets, but installable offline support is not implemented.
+Records remain unencrypted in browser localStorage. Use synthetic data in development. There is no authentication, backend, cloud synchronization, or production security. Clearing browser data removes records. The app uses no external runtime assets, and production builds support installation and offline app-shell caching.
 
 ## Manual acceptance
 
@@ -63,3 +63,28 @@ Save partial measurements, reload to confirm persistence, cancel and save edits,
 ## Guided daily workflow
 
 Today’s checklist counts saved measurements using the device’s local calendar date. The four-step check-in covers preparation, body measurements, sleep/wellbeing, and review. Blank measurements remain optional; at least one reading or note is required. Back navigation preserves inputs, and records are written only on final save. A successful save shows the recorded values, missing indicators, and links to trends, correction, and backup actions. Editing remains a single form. Drafts are held in memory and are lost if the page is refreshed.
+
+## Install and use offline
+
+Offline caching is enabled only in production builds. Run:
+
+```powershell
+npm run build
+npm run preview
+```
+
+Stop any dev server occupying port 8080 first. Open http://localhost:8080 in Chrome or Edge and wait for **Ready for offline use on this device**. Use the browser address-bar installation icon or its **Install app** menu. An **Install Orbit** button appears when the browser provides an installation prompt. On iPhone/iPad use Safari's Share → Add to Home Screen. The embedded preview may not support installation. Hosted deployments require HTTPS; localhost is supported for local testing.
+
+After the first successful setup, the cached production app can reopen at the same address with no server or internet connection. Measurements, history, edits, charts, and JSON backups remain local and usable offline. External research pages still need connectivity. The connection indicator reflects the device's network signal, not proof that the server is reachable. Browsers may evict cached files or local data; exports are still necessary for backups.
+
+New builds install in the background. **Update ready — reload** asks you to finish/save work before activating and reloading. No automatic reload interrupts a check-in. Other open windows receive a notice when a new worker takes control and can reload after saving. Updates cache public application files only; health data remains in localStorage and is never cached as a network response or uploaded.
+
+### Verify locally
+
+1. Build and preview; open once and wait for the ready message.
+2. Install using the browser menu if available.
+3. Stop the preview server (Ctrl+C), then reload the same address or reopen the installed app.
+4. With synthetic data, complete a check-in, view charts, edit a record, and export a backup while the server is stopped. Reload again and verify persistence.
+5. Restart preview to receive updates. Finish any draft before applying them.
+
+For development after testing offline: open browser DevTools → Application → Service Workers and unregister Orbit's worker, then start `npm run dev`. Avoid **Clear site data**, which also deletes health records. The existing production worker can otherwise keep serving its cached release instead of your development code.
