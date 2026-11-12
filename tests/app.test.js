@@ -28,14 +28,33 @@ test('loads old records, cancels edits, updates in place and confirms deletion',
  window.confirm=()=>false;await user.click(screen.getByRole('button',{name:'Delete',exact:true}));assert.equal(rows().length,1);
  window.confirm=()=>true;await user.click(screen.getByRole('button',{name:'Delete',exact:true}));assert.equal(rows().length,0);
 });
-test('creates partial readings, validates blood-pressure pair and preserves failed save input',async()=>{
- const user=mount();await user.click(screen.getByRole('button',{name:/Save check-in/}));assert.match(document.body.textContent,/Add at least one measurement/);
- await user.type(screen.getByLabelText(/Systolic pressure ·/),'120');
- await user.click(screen.getByRole('button',{name:/Save check-in/}));assert.match(document.body.textContent,/Enter both blood-pressure/);
- await user.clear(screen.getByLabelText(/Systolic pressure ·/));await user.type(heart(),'66');
+test('guided check-in validates pressure, preserves back navigation and failed save input',async()=>{
+ const user=mount();
+ await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
+ await user.type(screen.getByLabelText(/Systolic pressure/),'120');
+ await user.click(screen.getByRole('button',{name:'Continue',exact:true}));assert.match(document.body.textContent,/Enter both blood-pressure/);
+ await user.clear(screen.getByLabelText(/Systolic pressure/));await user.type(heart(),'66');
+ await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
+ await user.click(screen.getByRole('button',{name:'Back',exact:true}));assert.equal(heart().value,'66');
+ await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
+ await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
+ assert.ok(screen.getByRole('heading',{name:'Review before saving'}));assert.equal(rows().length,0);
  await user.click(screen.getByRole('button',{name:/Save check-in/}));assert.equal(rows()[0].heartRate,66);assert.equal(rows()[0].sleep,null);
- await user.type(heart(),'75');dom.window.Storage.prototype.setItem=()=>{throw Error('Full');};
+ assert.ok(screen.getByRole('heading',{name:'Check-in recorded'}));assert.match(document.body.textContent,/Not recorded: Systolic pressure/);
+ await user.click(screen.getByRole('button',{name:'New check-in'}));
+ await user.click(screen.getByRole('button',{name:'Continue',exact:true}));await user.type(heart(),'75');
+ await user.click(screen.getByRole('button',{name:'Continue',exact:true}));await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
+ dom.window.Storage.prototype.setItem=()=>{throw Error('Full');};
  await user.click(screen.getByRole('button',{name:/Save check-in/}));assert.equal(heart().value,'75');assert.equal(rows().length,1);assert.match(document.body.textContent,/Could not save/);
+});
+test('empty guided check-in cannot be saved and today checklist tracks saved values',async()=>{
+ const user=mount();
+ for(let i=0;i<3;i++)await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
+ assert.match(document.body.textContent,/Add at least one measurement/);assert.equal(rows().length,0);
+ await user.type(screen.getByLabelText('Symptoms or notes'),'Synthetic test note');
+ await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
+ await user.click(screen.getByRole('button',{name:/Save check-in/}));
+ assert.match(document.body.textContent,/1 check-in recorded today/);assert.match(document.body.textContent,/0 of 4 indicators recorded/);
 });
 test('imports compatible backups, rejects malformed backup and renders chart',async()=>{
  mount([sample]);
@@ -49,7 +68,7 @@ test('imports compatible backups, rejects malformed backup and renders chart',as
 });
 test('invalid saved data is not overwritten',()=>{
  window.localStorage.setItem(STORAGE_KEY,'{broken');render(React.createElement(App));
- assert.equal(screen.getByRole('button',{name:/Save check-in/}).disabled,true);
+ assert.equal(screen.getByRole('button',{name:'Continue',exact:true}).disabled,true);
  assert.equal(screen.getByRole('button',{name:/Import backup/}).disabled,true);
  assert.equal(window.localStorage.getItem(STORAGE_KEY),'{broken');
 });

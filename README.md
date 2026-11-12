@@ -59,3 +59,7 @@ Save partial measurements, reload to confirm persistence, cancel and save edits,
 3. Printable reports and optional chart comparisons.
 4. Identity, encryption, privacy, and sharing requirements.
 5. Medically reviewed baseline and escalation protocols.
+
+## Guided daily workflow
+
+Today’s checklist counts saved measurements using the device’s local calendar date. The four-step check-in covers preparation, body measurements, sleep/wellbeing, and review. Blank measurements remain optional; at least one reading or note is required. Back navigation preserves inputs, and records are written only on final save. A successful save shows the recorded values, missing indicators, and links to trends, correction, and backup actions. Editing remains a single form. Drafts are held in memory and are lost if the page is refreshed.
