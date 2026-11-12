@@ -1,45 +1,61 @@
 # Orbit — Astronaut health check-in
 
-Initial web-app prototype by team **4HARTZ**. Manual measurements, latest check-in cards, dated history, recent trend charts, and JSON export. No dependencies or build step.
+A React + Vite web-app prototype by team **4HARTZ**. Record basic health indicators, review trends, edit records, and import/export backups.
 
 ## Run locally
 
-From this folder, with Python installed:
+Requires Node.js 22.12 or newer (Node 22 LTS recommended) and npm.
 
 ```powershell
-python -m http.server 8080 --bind 127.0.0.1
+npm ci
+npm run dev
 ```
 
-Open http://localhost:8080 in a modern browser. Keep the same hostname and port to access the same storage. No internet connection is needed for the app itself. Stop the server with Ctrl+C.
+Open http://localhost:8080. Stop the server with Ctrl+C. Vite uses strict port 8080 to preserve the original app's browser storage address; stop an older Python server first if that port is occupied. The Python command no longer runs the source app because JSX needs Vite's transformation.
 
-## Scope and limitations
+## Existing records and backups
 
-Record resting heart rate, paired blood pressure, temperature, sleep duration and quality, mood, stress, and symptom notes. Missing measurements remain missing. Charts show up to seven most recent available values per indicator with dated text equivalents.
+The migration preserves the `orbit-health-v1` localStorage key, record fields, and version 1 JSON export format. Existing records load automatically in the same browser profile at the same origin, such as `http://localhost:8080`. `localhost` and `127.0.0.1`, different ports, and different browsers have separate storage. Export from the old address and import at the new address if needed.
 
-This is a prototype, not a medical device. Input limits are not clinical thresholds. There are no diagnoses, treatment recommendations, health scores, clinical alerts, or baseline assessments. Future medical rules and measurement procedures require qualified mission medical review.
+Imports accept version 1 Orbit JSON exports up to 5 MB and 10,000 records. The full backup is validated before saving. New IDs are merged; duplicate IDs with identical content are skipped; conflicts preserve existing records. Invalid saved data disables writes to avoid overwriting it. Saving failures preserve form input and existing data.
 
-Records are stored unencrypted in localStorage for one browser origin. Use synthetic data during development. There is no authentication, backend, synchronization, or production security. Clearing browser data removes records. JSON exports provide backup files; imports merge new records, skip duplicates, and preserve existing records when IDs conflict. Imports validate the complete backup before saving. Basic vital signs cannot assess bone density, radiation dose, or immune function.
-
-## Verification
+## Development commands
 
 ```powershell
-node --check app.js
+npm test
+npm run build
+npm run preview
 ```
 
-Manual acceptance: save partial measurements; reload to confirm persistence; reject an empty submission and a single blood-pressure value; add two dated readings to inspect a chart; export and inspect JSON; navigate by keyboard; inspect a narrow viewport. Confirm a blocked/full storage error preserves form input.
+Tests use Node's test runner, React Testing Library, and jsdom. Build outputs production assets in `dist/`. Preview serves that build at http://localhost:8080 (stop the dev server first). Deploy `dist/` to static hosting; `npm run dev` is for local development. Commit `package-lock.json`; generated `dist/` and `node_modules/` are ignored.
+
+## Project structure
+
+- `src/main.jsx`: React entry point and styles.
+- `src/App.jsx`: shared state, persistence, and record actions.
+- `src/components/`: check-in form, metric cards, SVG chart, change summary, and history with backup controls.
+- `src/health.js`: measurement definitions, validation, backup merging, storage helpers, and trend calculations.
+- `src/styles.css`: responsive styling retained from the original app.
+- `tests/`: data compatibility and React interaction tests.
+
+## Features and limits
+
+Record resting heart rate, paired blood pressure, temperature, sleep duration and quality, mood, stress, and symptom notes. Missing measurements remain missing. Edit or delete records from history; edits can be cancelled and deletion requires confirmation.
+
+Charts filter by inclusive local dates and measurement context and show up to 100 recent available values per indicator, with dated text equivalents. What changed compares the most recent comparable pair per indicator in the same context. These observations do not infer causes or health status.
+
+This is a prototype, not a medical device. Entry limits are not clinical thresholds. There are no diagnoses, treatment recommendations, health scores, medical alerts, or baseline assessments. Future medical rules require qualified mission medical review. Basic readings cannot assess bone density, radiation dose, or immune function.
+
+Records remain unencrypted in browser localStorage. Use synthetic data in development. There is no authentication, backend, cloud synchronization, or production security. Clearing browser data removes records. The app uses no external runtime assets, but installable offline support is not implemented.
+
+## Manual acceptance
+
+Save partial measurements, reload to confirm persistence, cancel and save edits, confirm/cancel deletion, import an old export twice, reject malformed JSON, inspect charts and filters, export JSON, navigate by keyboard, and inspect a narrow viewport. Confirm a blocked/full storage error preserves inputs.
 
 ## Next steps
 
-1. Review the workflow with users and medical advisers.
-2. Add broader browser coverage and optional chart comparisons.
-3. Define identity, encryption, privacy, and crew-sharing requirements.
-4. Develop medically reviewed baseline comparisons and escalation protocols.
-5. Add installable offline support and optional device integrations.
-
-## Record management and trends
-
-History provides Edit and Delete actions. Deletion requires confirmation; edits can be cancelled. Storage failures preserve existing records and unsaved form input. Import accepts version 1 Orbit JSON exports up to 5 MB and 10,000 records. Invalid backups are rejected without changing saved data.
-
-Charts filter by inclusive local dates and measurement context, showing up to 100 recent available readings. The What changed panel compares the most recent comparable pair per indicator in the same context, with dates and raw differences; it does not infer causes or health status.
-
-Run behavior checks with `node --test tests/app.test.cjs`.
+1. Measurement guidance and daily checklists.
+2. Installable offline app support.
+3. Printable reports and optional chart comparisons.
+4. Identity, encryption, privacy, and sharing requirements.
+5. Medically reviewed baseline and escalation protocols.
