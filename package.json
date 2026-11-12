@@ -17,11 +17,12 @@
     "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "vite": "8.3.8",
-    "@vitejs/plugin-react": "6.3.0",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.10",
+    "@vitejs/plugin-react": "6.3.0",
+    "fake-indexeddb": "6.2.8",
     "jsdom": "26.1.0",
-    "tsx": "4.23.15"
+    "tsx": "4.23.15",
+    "vite": "8.3.8"
   }
 }

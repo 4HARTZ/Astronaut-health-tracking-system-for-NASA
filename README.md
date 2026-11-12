@@ -15,7 +15,7 @@ Open http://localhost:8080. Stop the server with Ctrl+C. Vite uses strict port 8
 
 ## Existing records and backups
 
-The migration preserves the `orbit-health-v1` localStorage key, record fields, and version 1 JSON export format. Existing records load automatically in the same browser profile at the same origin, such as `http://localhost:8080`. `localhost` and `127.0.0.1`, different ports, and different browsers have separate storage. Export from the old address and import at the new address if needed.
+The app migrates the `orbit-health-v1` localStorage records into the local-only workspace in the `orbit-v2` IndexedDB database. Record fields and version 1 JSON backups remain compatible. Existing records migrate automatically in the same browser profile at the same origin, such as `http://localhost:8080`. `localhost` and `127.0.0.1`, different ports, and different browsers have separate storage. Export from the old address and import at the new address if needed.
 
 Imports accept version 1 Orbit JSON exports up to 5 MB and 10,000 records. The full backup is validated before saving. New IDs are merged; duplicate IDs with identical content are skipped; conflicts preserve existing records. Invalid saved data disables writes to avoid overwriting it. Saving failures preserve form input and existing data.
 
@@ -46,7 +46,7 @@ Charts filter by inclusive local dates and measurement context and show up to 10
 
 This is a prototype, not a medical device. Entry limits are not clinical thresholds. There are no diagnoses, treatment recommendations, health scores, medical alerts, or baseline assessments. Future medical rules require qualified mission medical review. Basic readings cannot assess bone density, radiation dose, or immune function.
 
-Records remain unencrypted in browser localStorage. Use synthetic data in development. There is no authentication, backend, cloud synchronization, or production security. Clearing browser data removes records. The app uses no external runtime assets, and production builds support installation and offline app-shell caching.
+Records and the local change journal remain unencrypted in IndexedDB. The original localStorage array is retained as a migration backup. Use synthetic data in development. There is no authentication, backend, cloud synchronization, or production security. Clearing browser data removes records. The app uses no external runtime assets, and production builds support installation and offline app-shell caching.
 
 ## Manual acceptance
 
@@ -77,7 +77,7 @@ Stop any dev server occupying port 8080 first. Open http://localhost:8080 in Chr
 
 After the first successful setup, the cached production app can reopen at the same address with no server or internet connection. Measurements, history, edits, charts, and JSON backups remain local and usable offline. External research pages still need connectivity. The connection indicator reflects the device's network signal, not proof that the server is reachable. Browsers may evict cached files or local data; exports are still necessary for backups.
 
-New builds install in the background. **Update ready — reload** asks you to finish/save work before activating and reloading. No automatic reload interrupts a check-in. Other open windows receive a notice when a new worker takes control and can reload after saving. Updates cache public application files only; health data remains in localStorage and is never cached as a network response or uploaded.
+New builds install in the background. **Update ready — reload** asks you to finish/save work before activating and reloading. No automatic reload interrupts a check-in. Other open windows receive a notice when a new worker takes control and can reload after saving. Updates cache public application files only; health data remains in device storage and is never cached as a network response or uploaded.
 
 ### Verify locally
 
@@ -96,3 +96,19 @@ Use **Health report** below the history, or **Prepare report** after saving a ch
 Select **Print / Save as PDF** to open the browser print dialog. Choose a printer or Save as PDF. The print stylesheet includes only the report. Review the destination and contents before printing or sharing. The app does not upload, email, or store the generated report separately. Backups and reports have different purposes: JSON backups can be reimported; printed reports cannot.
 
 Reports are snapshots of saved records at preview time. Generate a fresh preview after edits or new records. Unsaved drafts are excluded. All dates use the device timezone, which is printed on the report. Missing values remain unknown; comparisons are descriptive and are not diagnoses or fitness assessments. Print/PDF support depends on the browser; the embedded preview may not expose printing.
+
+## Accounts and synchronization roadmap
+
+See [the accounts and synchronization plan](docs/accounts-and-sync-plan.md) for proposed identity, access controls, encrypted local workspaces, offline synchronization, conflict handling, migration, and delivery milestones. This is a design plan; account login and cloud sync are not implemented yet.
+
+## Workspace storage foundation
+
+The local-only workspace now uses IndexedDB. Each save, edit, import, or delete commits a record change and a durable outbox entry in the same transaction. A journal count is displayed in the app. This is preparation for a future sync engine: no account exists, no journal entries are uploaded, and the queue is not automatically assigned to a future account.
+
+Migration validates and verifies existing records before committing its completion marker. It is repeatable after interruption and keeps the original localStorage array unchanged as a recovery source. Export a fresh JSON backup after migration; the retained array is a one-time source, not a live mirror. Close old Orbit windows and update the installed app before editing so an older release cannot keep writing to the obsolete storage location. Rolling back to the old release will not show newer IndexedDB changes; use a fresh export instead.
+
+Repository operations always specify a workspace. Revision checks reject stale edits/deletes from another window, preserving the unsaved form. Imports merge against current database state and cannot resurrect deleted IDs; save a genuinely new measurement with a new ID when needed. Other current-version tabs refresh through BroadcastChannel, or when made visible. Workspace partitioning is a development boundary, not authentication or encryption.
+
+Deletion hides records using tombstones for future sync. Earlier values may still exist in the local journal and migration backup; deletion is not secure erasure. Journal retention/compaction and explicit legacy-backup cleanup belong to the later retention work. Clearing browser site data removes all local records, journal entries and offline assets. There is no cloud recovery yet.
+
+Storage startup failures disable writes and show an explanation. Valid legacy data is offered read-only for export if available. Transient write failures keep form values and leave both records and journal unchanged. Storage loading blocks saves until initialization completes. Automated tests cover migration rollback/retry, persistence across reopen, workspace isolation, stale writes, atomic outbox failures, imports, and the existing UI workflow.

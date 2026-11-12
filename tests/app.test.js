@@ -7,29 +7,42 @@ Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configu
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 dom.window.HTMLElement.prototype.scrollIntoView=()=>{};
 const React=(await import('react')).default;
-const {render,screen,fireEvent,waitFor,cleanup}=await import('@testing-library/react');
+const {render,screen,fireEvent,waitFor,cleanup,act}=await import('@testing-library/react');
 const {default:userEvent}=await import('@testing-library/user-event');
 const {default:App}=await import('../src/App.jsx');
 const {STORAGE_KEY}=await import('../src/health.js');
 const sample={id:'existing',time:'2026-01-01T12:00:00.000Z',context:'Resting',notes:'Existing note',heartRate:64,systolic:118,diastolic:76,temperature:36.6,sleep:8,quality:4,mood:4,stress:2};
+const {IDBFactory}=await import('fake-indexeddb');
+const {createRepository,openDatabase}=await import('../src/storage/repository.js');
+let testRepository,db,failWrites=false;
 const originalSet=dom.window.Storage.prototype.setItem;
-afterEach(()=>{cleanup();dom.window.Storage.prototype.setItem=originalSet;window.localStorage.clear();});
-function mount(records=[]){window.localStorage.setItem(STORAGE_KEY,JSON.stringify(records));render(React.createElement(App));return userEvent.setup({document});}
+afterEach(()=>{cleanup();dom.window.Storage.prototype.setItem=originalSet;window.localStorage.clear();db?.close();failWrites=false;});
+async function mount(records=[]){
+ window.localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+ db=await openDatabase(new IDBFactory());testRepository=createRepository(db);
+ await testRepository.migrateLegacy(window.localStorage);
+ const save=testRepository.save;testRepository.save=(...args)=>{if(failWrites)return Promise.reject(Error('Storage is full'));return save(...args);};
+ render(React.createElement(App,{repositoryFactory:async()=>testRepository}));
+ await waitFor(()=>assert.equal(screen.getByRole('button',{name:'Continue',exact:true}).disabled,false));
+ const user=userEvent.setup({document});
+ user.click=async(...args)=>{await act(async()=>{fireEvent.click(args[0]);await testRepository.snapshot();await testRepository.snapshot();});};
+ return user;
+}
 const heart=()=>screen.getByLabelText(/Resting heart rate · bpm/);
-const rows=()=>JSON.parse(window.localStorage.getItem(STORAGE_KEY));
+const rows=async()=>(await testRepository.snapshot()).entries;
 test('loads old records, cancels edits, updates in place and confirms deletion',async()=>{
- const user=mount([sample]);
+ const user=await mount([sample]);
  await user.click(screen.getByRole('button',{name:'Edit',exact:true}));
  assert.equal(heart().value,'64');await user.clear(heart());await user.type(heart(),'70');
- await user.click(screen.getByRole('button',{name:'Cancel edit'}));assert.equal(rows()[0].heartRate,64);
+ await user.click(screen.getByRole('button',{name:'Cancel edit'}));assert.equal((await rows())[0].heartRate,64);
  await user.click(screen.getByRole('button',{name:'Edit',exact:true}));await user.clear(heart());await user.type(heart(),'70');
  await user.click(screen.getByRole('button',{name:'Update check-in'}));
- assert.equal(rows().length,1);assert.equal(rows()[0].id,'existing');assert.equal(rows()[0].heartRate,70);
- window.confirm=()=>false;await user.click(screen.getByRole('button',{name:'Delete',exact:true}));assert.equal(rows().length,1);
- window.confirm=()=>true;await user.click(screen.getByRole('button',{name:'Delete',exact:true}));assert.equal(rows().length,0);
+ assert.equal((await rows()).length,1);assert.equal((await rows())[0].id,'existing');assert.equal((await rows())[0].heartRate,70);
+ window.confirm=()=>false;await user.click(screen.getByRole('button',{name:'Delete',exact:true}));assert.equal((await rows()).length,1);
+ window.confirm=()=>true;await user.click(screen.getByRole('button',{name:'Delete',exact:true}));assert.equal((await rows()).length,0);
 });
 test('guided check-in validates pressure, preserves back navigation and failed save input',async()=>{
- const user=mount();
+ const user=await mount();
  await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
  await user.type(screen.getByLabelText(/Systolic pressure/),'120');
  await user.click(screen.getByRole('button',{name:'Continue',exact:true}));assert.match(document.body.textContent,/Enter both blood-pressure/);
@@ -38,43 +51,44 @@ test('guided check-in validates pressure, preserves back navigation and failed s
  await user.click(screen.getByRole('button',{name:'Back',exact:true}));assert.equal(heart().value,'66');
  await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
  await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
- assert.ok(screen.getByRole('heading',{name:'Review before saving'}));assert.equal(rows().length,0);
- await user.click(screen.getByRole('button',{name:/Save check-in/}));assert.equal(rows()[0].heartRate,66);assert.equal(rows()[0].sleep,null);
- assert.ok(screen.getByRole('heading',{name:'Check-in recorded'}));assert.match(document.body.textContent,/Not recorded: Systolic pressure/);
+ assert.ok(screen.getByRole('heading',{name:'Review before saving'}));assert.equal((await rows()).length,0);
+ await user.click(screen.getByRole('button',{name:/Save check-in/}));assert.equal((await rows())[0].heartRate,66);assert.equal((await rows())[0].sleep,null);
+ await screen.findByRole('heading',{name:'Check-in recorded'});assert.match(document.body.textContent,/Not recorded: Systolic pressure/);
  await user.click(screen.getByRole('button',{name:'New check-in'}));
  await user.click(screen.getByRole('button',{name:'Continue',exact:true}));await user.type(heart(),'75');
  await user.click(screen.getByRole('button',{name:'Continue',exact:true}));await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
- dom.window.Storage.prototype.setItem=()=>{throw Error('Full');};
- await user.click(screen.getByRole('button',{name:/Save check-in/}));assert.equal(heart().value,'75');assert.equal(rows().length,1);assert.match(document.body.textContent,/Could not save/);
+ failWrites=true;
+ await user.click(screen.getByRole('button',{name:/Save check-in/}));assert.equal(heart().value,'75');assert.equal((await rows()).length,1);assert.match(document.body.textContent,/Could not save/);
 });
 test('empty guided check-in cannot be saved and today checklist tracks saved values',async()=>{
- const user=mount();
+ const user=await mount();
  for(let i=0;i<3;i++)await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
- assert.match(document.body.textContent,/Add at least one measurement/);assert.equal(rows().length,0);
+ assert.match(document.body.textContent,/Add at least one measurement/);assert.equal((await rows()).length,0);
  await user.type(screen.getByLabelText('Symptoms or notes'),'Synthetic test note');
  await user.click(screen.getByRole('button',{name:'Continue',exact:true}));
  await user.click(screen.getByRole('button',{name:/Save check-in/}));
- assert.match(document.body.textContent,/1 check-in recorded today/);assert.match(document.body.textContent,/0 of 4 indicators recorded/);
+ await waitFor(()=>assert.match(document.body.textContent,/1 check-in recorded today/));assert.match(document.body.textContent,/0 of 4 indicators recorded/);
 });
 test('imports compatible backups, rejects malformed backup and renders chart',async()=>{
- mount([sample]);
+ await mount([sample]);
  const input=screen.getByLabelText('Backup file');
  const second={...sample,id:'second',time:'2026-01-02T12:00:00Z',heartRate:70};
  fireEvent.change(input,{target:{files:[{size:100,text:async()=>JSON.stringify({schemaVersion:1,entries:[sample,second]})}]}});
- await waitFor(()=>assert.equal(rows().length,2));
+ await waitFor(async()=>assert.equal((await rows()).length,2));
  assert.ok(screen.getByRole('img',{name:/Resting heart rate/}));assert.match(document.body.textContent,/64 → 70/);
  fireEvent.change(input,{target:{files:[{size:100,text:async()=>'{broken'}]}});
- await waitFor(()=>assert.match(document.body.textContent,/Invalid JSON file/));assert.equal(rows().length,2);
+ await waitFor(()=>assert.match(document.body.textContent,/Invalid JSON file/));assert.equal((await rows()).length,2);
 });
-test('invalid saved data is not overwritten',()=>{
- window.localStorage.setItem(STORAGE_KEY,'{broken');render(React.createElement(App));
+test('invalid saved data is not overwritten',async()=>{
+ window.localStorage.setItem(STORAGE_KEY,'{broken');render(React.createElement(App,{repositoryFactory:async()=>{throw Error('Invalid saved data');}}));
+ await waitFor(()=>assert.match(document.body.textContent,/Device storage could not/));
  assert.equal(screen.getByRole('button',{name:'Continue',exact:true}).disabled,true);
  assert.equal(screen.getByRole('button',{name:/Import backup/}).disabled,true);
  assert.equal(window.localStorage.getItem(STORAGE_KEY),'{broken');
 });
 
 test('report previews selected saved data, excludes notes on request, and prints only on action',async()=>{
- const user=mount([sample]);
+ const user=await mount([sample]);
  await user.type(screen.getByLabelText('Crew member or report label (optional)'),'Crew A');
  await user.click(screen.getByRole('button',{name:'Preview health report'}));
  let preview=screen.getByRole('article',{name:'Health report preview'});
@@ -86,10 +100,10 @@ test('report previews selected saved data, excludes notes on request, and prints
  await user.click(screen.getByRole('button',{name:'Preview health report'}));
  preview=screen.getByRole('article',{name:'Health report preview'});
  assert.doesNotMatch(preview.textContent,/Existing note/);assert.match(preview.textContent,/Symptom notes were excluded/);
- assert.equal(rows().length,1);
+ assert.equal((await rows()).length,1);
 });
 test('report rejects reversed/empty ranges and counts missing readings',async()=>{
- const user=mount([{...sample,sleep:null}]);
+ const user=await mount([{...sample,sleep:null}]);
  fireEvent.change(screen.getByLabelText('Report from'),{target:{value:'2026-02-01'}});
  fireEvent.change(screen.getByLabelText('Report through'),{target:{value:'2026-01-01'}});
  await user.click(screen.getByRole('button',{name:'Preview health report'}));assert.match(document.body.textContent,/start date on or before/);
