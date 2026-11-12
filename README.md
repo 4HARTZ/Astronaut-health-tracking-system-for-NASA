@@ -112,3 +112,9 @@ Repository operations always specify a workspace. Revision checks reject stale e
 Deletion hides records using tombstones for future sync. Earlier values may still exist in the local journal and migration backup; deletion is not secure erasure. Journal retention/compaction and explicit legacy-backup cleanup belong to the later retention work. Clearing browser site data removes all local records, journal entries and offline assets. There is no cloud recovery yet.
 
 Storage startup failures disable writes and show an explanation. Valid legacy data is offered read-only for export if available. Transient write failures keep form values and leave both records and journal unchanged. Storage loading blocks saves until initialization completes. Automated tests cover migration rollback/retry, persistence across reopen, workspace isolation, stale writes, atomic outbox failures, imports, and the existing UI workflow.
+
+## Educational observations awaiting review
+
+**Health observations** presents recent data gaps, sleep-duration sequences, wellbeing rating changes, and blood-pressure measurement context with source links and dated evidence. Every rule is marked **Awaiting medical review**; no reviewer or approval is claimed. Sources provide background, not validation of app rules. Clinical alerts remain disabled. No output means no observation was generated, not that health is normal. The panel uses the preceding seven days; the separate What changed panel uses all saved history.
+
+See [the insight review specification](docs/insights-review.md) for source rationale, trigger definitions, limitations, and the qualified-review checklist. The app does not interpret symptom text, diagnose conditions, or prescribe treatment. These dashboard observations are not automatically included in printed reports.
