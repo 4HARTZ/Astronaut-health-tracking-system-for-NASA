@@ -72,3 +72,31 @@ test('invalid saved data is not overwritten',()=>{
  assert.equal(screen.getByRole('button',{name:/Import backup/}).disabled,true);
  assert.equal(window.localStorage.getItem(STORAGE_KEY),'{broken');
 });
+
+test('report previews selected saved data, excludes notes on request, and prints only on action',async()=>{
+ const user=mount([sample]);
+ await user.type(screen.getByLabelText('Crew member or report label (optional)'),'Crew A');
+ await user.click(screen.getByRole('button',{name:'Preview health report'}));
+ let preview=screen.getByRole('article',{name:'Health report preview'});
+ assert.match(preview.textContent,/Crew A/);assert.match(preview.textContent,/Existing note/);assert.match(preview.textContent,/64/);
+ let printed=0;window.print=()=>printed++;
+ assert.equal(printed,0);await user.click(screen.getByRole('button',{name:'Print / Save as PDF'}));assert.equal(printed,1);
+ await user.click(screen.getByLabelText('Include symptom notes in this report'));
+ assert.equal(screen.queryByRole('article',{name:'Health report preview'}),null);
+ await user.click(screen.getByRole('button',{name:'Preview health report'}));
+ preview=screen.getByRole('article',{name:'Health report preview'});
+ assert.doesNotMatch(preview.textContent,/Existing note/);assert.match(preview.textContent,/Symptom notes were excluded/);
+ assert.equal(rows().length,1);
+});
+test('report rejects reversed/empty ranges and counts missing readings',async()=>{
+ const user=mount([{...sample,sleep:null}]);
+ fireEvent.change(screen.getByLabelText('Report from'),{target:{value:'2026-02-01'}});
+ fireEvent.change(screen.getByLabelText('Report through'),{target:{value:'2026-01-01'}});
+ await user.click(screen.getByRole('button',{name:'Preview health report'}));assert.match(document.body.textContent,/start date on or before/);
+ fireEvent.change(screen.getByLabelText('Report through'),{target:{value:'2026-03-01'}});
+ await user.click(screen.getByRole('button',{name:'Preview health report'}));assert.match(document.body.textContent,/No saved check-ins match/);
+ fireEvent.change(screen.getByLabelText('Report from'),{target:{value:''}});fireEvent.change(screen.getByLabelText('Report through'),{target:{value:''}});
+ await user.click(screen.getByRole('button',{name:'Preview health report'}));
+ const preview=screen.getByRole('article',{name:'Health report preview'});
+ assert.match(preview.textContent,/Not recorded/);assert.match(preview.textContent,/Not enough comparable readings/);
+});
