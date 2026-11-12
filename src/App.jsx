@@ -1,6 +1,7 @@
 import React from 'react';
 import { useRef, useState } from 'react';
 import { formatDate, loadRecords, prepareImport, saveRecords, sortEntries } from './health.js';
+import PwaStatus from './components/PwaStatus.jsx';
 import DailyChecklist, { SavedResults } from './components/DailyChecklist.jsx';
 import CheckInForm from './components/CheckInForm.jsx';
 import MetricCards from './components/MetricCards.jsx';
@@ -47,7 +48,7 @@ export default function App(){
  return <><header><strong>◉ ORBIT <small>CREW HEALTH</small></strong><span>LOCAL PROTOTYPE</span></header><main>
  <section className="hero"><p className="eyebrow">YOUR DAILY HEALTH COMPANION</p><h1>A small check-in.<br/>A clearer picture.</h1><p>Record your measurements, reflect on how you feel, and see what changes over time.</p><a className="button" href="#check-in">Start check-in ↗</a></section>
  <aside><strong>Your records stay on this device.</strong><p>Browser storage is unencrypted. Export a backup before clearing browser data. Use synthetic data while testing.</p><p>This prototype does not diagnose conditions, recommend treatment, or provide medical alerts.</p></aside>
- <DailyChecklist entries={entries}/><MetricCards entries={entries}/><div className="workspace"><>{saved?<SavedResults entry={saved} onEdit={edit} onNew={()=>{setSaved(null);resetForm();setMessage('');}}/>:<CheckInForm key={formVersion} entry={editing} disabled={disabled} onSave={save} onCancel={()=>{resetForm();setMessage('Edit cancelled.');}} message={message} setMessage={setMessage}/>}</><div id="trends"><TrendChart entries={entries}/><ChangesPanel entries={entries}/>
+ <PwaStatus/><DailyChecklist entries={entries}/><MetricCards entries={entries}/><div className="workspace"><>{saved?<SavedResults entry={saved} onEdit={edit} onNew={()=>{setSaved(null);resetForm();setMessage('');}}/>:<CheckInForm key={formVersion} entry={editing} disabled={disabled} onSave={save} onCancel={()=>{resetForm();setMessage('Edit cancelled.');}} message={message} setMessage={setMessage}/>}</><div id="trends"><TrendChart entries={entries}/><ChangesPanel entries={entries}/>
  <section className="panel info"><h2>Understand your data</h2><p>Heart rate and blood pressure offer cardiovascular context. Sleep, mood, and stress help you reflect on wellbeing.</p><p>Basic readings cannot measure bone density, radiation exposure, or immune function. These require dedicated assessments.</p><a href="https://www.nasa.gov/hrp/risks/" target="_blank" rel="noopener noreferrer">Explore NASA’s health research ↗</a></section></div></div>
  <RecordHistory entries={entries} disabled={disabled} onEdit={edit} onDelete={remove} onImport={importRecords} message={recordMessage}/>
  </main><footer>Built by 4HARTZ · Early prototype · No medical alert system configured</footer></>;
