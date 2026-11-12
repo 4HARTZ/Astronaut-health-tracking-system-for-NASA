@@ -1,0 +1,55 @@
+import { test, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { JSDOM } from 'jsdom';
+const dom=new JSDOM('<!doctype html><html><body></body></html>',{url:'http://localhost:8080'});
+for(const name of ['window','document','HTMLElement','HTMLInputElement','Node','MutationObserver','FormData','File','Blob','getComputedStyle'])globalThis[name]=dom.window[name];
+Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});
+globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+dom.window.HTMLElement.prototype.scrollIntoView=()=>{};
+const React=(await import('react')).default;
+const {render,screen,fireEvent,waitFor,cleanup}=await import('@testing-library/react');
+const {default:userEvent}=await import('@testing-library/user-event');
+const {default:App}=await import('../src/App.jsx');
+const {STORAGE_KEY}=await import('../src/health.js');
+const sample={id:'existing',time:'2026-01-01T12:00:00.000Z',context:'Resting',notes:'Existing note',heartRate:64,systolic:118,diastolic:76,temperature:36.6,sleep:8,quality:4,mood:4,stress:2};
+const originalSet=dom.window.Storage.prototype.setItem;
+afterEach(()=>{cleanup();dom.window.Storage.prototype.setItem=originalSet;window.localStorage.clear();});
+function mount(records=[]){window.localStorage.setItem(STORAGE_KEY,JSON.stringify(records));render(React.createElement(App));return userEvent.setup({document});}
+const heart=()=>screen.getByLabelText(/Resting heart rate · bpm/);
+const rows=()=>JSON.parse(window.localStorage.getItem(STORAGE_KEY));
+test('loads old records, cancels edits, updates in place and confirms deletion',async()=>{
+ const user=mount([sample]);
+ await user.click(screen.getByRole('button',{name:'Edit',exact:true}));
+ assert.equal(heart().value,'64');await user.clear(heart());await user.type(heart(),'70');
+ await user.click(screen.getByRole('button',{name:'Cancel edit'}));assert.equal(rows()[0].heartRate,64);
+ await user.click(screen.getByRole('button',{name:'Edit',exact:true}));await user.clear(heart());await user.type(heart(),'70');
+ await user.click(screen.getByRole('button',{name:'Update check-in'}));
+ assert.equal(rows().length,1);assert.equal(rows()[0].id,'existing');assert.equal(rows()[0].heartRate,70);
+ window.confirm=()=>false;await user.click(screen.getByRole('button',{name:'Delete',exact:true}));assert.equal(rows().length,1);
+ window.confirm=()=>true;await user.click(screen.getByRole('button',{name:'Delete',exact:true}));assert.equal(rows().length,0);
+});
+test('creates partial readings, validates blood-pressure pair and preserves failed save input',async()=>{
+ const user=mount();await user.click(screen.getByRole('button',{name:/Save check-in/}));assert.match(document.body.textContent,/Add at least one measurement/);
+ await user.type(screen.getByLabelText(/Systolic pressure ·/),'120');
+ await user.click(screen.getByRole('button',{name:/Save check-in/}));assert.match(document.body.textContent,/Enter both blood-pressure/);
+ await user.clear(screen.getByLabelText(/Systolic pressure ·/));await user.type(heart(),'66');
+ await user.click(screen.getByRole('button',{name:/Save check-in/}));assert.equal(rows()[0].heartRate,66);assert.equal(rows()[0].sleep,null);
+ await user.type(heart(),'75');dom.window.Storage.prototype.setItem=()=>{throw Error('Full');};
+ await user.click(screen.getByRole('button',{name:/Save check-in/}));assert.equal(heart().value,'75');assert.equal(rows().length,1);assert.match(document.body.textContent,/Could not save/);
+});
+test('imports compatible backups, rejects malformed backup and renders chart',async()=>{
+ mount([sample]);
+ const input=screen.getByLabelText('Backup file');
+ const second={...sample,id:'second',time:'2026-01-02T12:00:00Z',heartRate:70};
+ fireEvent.change(input,{target:{files:[{size:100,text:async()=>JSON.stringify({schemaVersion:1,entries:[sample,second]})}]}});
+ await waitFor(()=>assert.equal(rows().length,2));
+ assert.ok(screen.getByRole('img',{name:/Resting heart rate/}));assert.match(document.body.textContent,/64 → 70/);
+ fireEvent.change(input,{target:{files:[{size:100,text:async()=>'{broken'}]}});
+ await waitFor(()=>assert.match(document.body.textContent,/Invalid JSON file/));assert.equal(rows().length,2);
+});
+test('invalid saved data is not overwritten',()=>{
+ window.localStorage.setItem(STORAGE_KEY,'{broken');render(React.createElement(App));
+ assert.equal(screen.getByRole('button',{name:/Save check-in/}).disabled,true);
+ assert.equal(screen.getByRole('button',{name:/Import backup/}).disabled,true);
+ assert.equal(window.localStorage.getItem(STORAGE_KEY),'{broken');
+});
