@@ -1,4 +1,5 @@
 import { loadRecords, prepareImport, sortEntries, valid } from '../health.js';
+import { validSession } from '../cognitive.js';
 
 export const LOCAL_WORKSPACE = 'local-only';
 const DATABASE = 'orbit-v2';
@@ -7,9 +8,11 @@ function completion(tx){return new Promise((resolve,reject)=>{tx.oncomplete=reso
 export function openDatabase(factory=globalThis.indexedDB,name=DATABASE){
  return new Promise((resolve,reject)=>{
   if(!factory){reject(Error('IndexedDB is unavailable.'));return;}
-  const req=factory.open(name,1);
+  const req=factory.open(name,2);
   req.onupgradeneeded=()=>{
    const db=req.result;
+   if(!db.objectStoreNames.contains('cognitiveSessions')){const sessions=db.createObjectStore('cognitiveSessions',{keyPath:['workspace','id']});sessions.createIndex('workspace','workspace');}
+   if(db.objectStoreNames.contains('records'))return;
    const records=db.createObjectStore('records',{keyPath:['workspace','id']});records.createIndex('workspace','workspace');
    const outbox=db.createObjectStore('outbox',{keyPath:['workspace','mutationId']});outbox.createIndex('workspace','workspace');
    db.createObjectStore('metadata',{keyPath:['workspace','key']});
@@ -81,7 +84,29 @@ export function createRepository(db,workspace=LOCAL_WORKSPACE,{uuid=()=>crypto.r
    return {added,duplicates:merged.duplicates,conflicts:merged.conflicts+deletedConflicts};
   });notify(workspace);return result;
  }
- return {workspace,snapshot,migrateLegacy,save,remove,importBackup};
+ async function cognitiveSessions(){return transaction(['cognitiveSessions'],'readonly',async tx=>(await request(tx.objectStore('cognitiveSessions').index('workspace').getAll(workspace))).map(row=>row.payload).sort((a,b)=>b.startedAt.localeCompare(a.startedAt)));}
+ async function saveCognitiveSession(session){
+  if(!validSession(session))throw Error('Invalid cognitive session.');
+  await transaction(['cognitiveSessions','outbox'],'readwrite',async tx=>{
+   const store=tx.objectStore('cognitiveSessions'),old=await request(store.get([workspace,session.id]));
+   if(old&&JSON.stringify(old.payload)===JSON.stringify(session))return;
+   if(old&&old.payload.status!=='running')throw Error('This session is already finalized.');
+   store.put({workspace,id:session.id,payload:session});
+   tx.objectStore('outbox').add({workspace,mutationId:uuid(),entityType:'cognitive-session',recordId:session.id,operation:'upsert',payload:session,createdAt:new Date().toISOString(),state:'local-only'});
+  });notify(workspace);
+ }
+ async function importCognitiveBackup(backup){
+  if(backup?.type!=='orbit-cognitive-backup'||backup.schemaVersion!==1||!Array.isArray(backup.sessions)||backup.sessions.length>10000||!backup.sessions.every(validSession))throw Error('Invalid cognitive backup. No sessions imported.');
+  const count=await transaction(['cognitiveSessions','outbox'],'readwrite',async tx=>{
+   const store=tx.objectStore('cognitiveSessions');let added=0;
+   for(const session of backup.sessions){
+    if(await request(store.get([workspace,session.id])))continue;
+    store.add({workspace,id:session.id,payload:session});
+    tx.objectStore('outbox').add({workspace,mutationId:uuid(),entityType:'cognitive-session',recordId:session.id,operation:'upsert',payload:session,createdAt:new Date().toISOString(),state:'local-only'});added++;
+   }return added;
+  });notify(workspace);return count;
+ }
+ return {workspace,snapshot,migrateLegacy,save,remove,importBackup,cognitiveSessions,saveCognitiveSession,importCognitiveBackup};
 }
 export async function initializeLocalRepository(){
  const db=await openDatabase();

@@ -29,6 +29,14 @@ async function mount(records=[]){
  return user;
 }
 const heart=()=>screen.getByLabelText(/Resting heart rate · bpm/);
+test('breathing guide replaces games, pauses and stops without saving health data',async()=>{
+ const user=await mount();assert.equal(screen.queryByRole('button',{name:'Practice Signal Watch'}),null);
+ assert.equal(screen.queryByRole('button',{name:'Plant somewhere'}),null);
+ await user.click(screen.getByRole('button',{name:'Begin breathing'}));assert.match(document.body.textContent,/Breathe in/);
+ await user.click(screen.getByRole('button',{name:'Pause guide'}));assert.ok(screen.getByRole('button',{name:'Resume guide'}));
+ await user.click(screen.getByRole('button',{name:'Stop session'}));assert.ok(screen.getByRole('button',{name:'Begin breathing'}));
+ assert.equal((await testRepository.snapshot()).pending,0);assert.equal((await testRepository.cognitiveSessions()).length,0);
+});
 const rows=async()=>(await testRepository.snapshot()).entries;
 test('loads old records, cancels edits, updates in place and confirms deletion',async()=>{
  const user=await mount([sample]);
