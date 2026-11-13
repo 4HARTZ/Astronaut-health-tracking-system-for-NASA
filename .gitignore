@@ -1,3 +1,7 @@
 node_modules/
 dist/
 *.local
+
+# Local presentation artifacts and generation files
+/.pitch-build/
+/presentations/
