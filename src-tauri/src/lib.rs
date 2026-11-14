@@ -1,14 +1,12 @@
 pub mod models;
 pub mod db;
 pub mod rppg;
-pub mod ai;
 
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 use db::Database;
 use models::{CheckInRecord, ImportResult, StorageStats};
 use rppg::{RppgManager, RppgStatus};
-use ai::{calculate_fatigue_forecast, FatigueModelOutput, SimulationInput};
 
 pub struct AppState {
     pub db: Arc<Database>,
@@ -23,7 +21,7 @@ fn get_system_info() -> serde_json::Value {
         "app_version": env!("CARGO_PKG_VERSION"),
         "app_name": "NASA ORBIT",
         "database": "SQLite 3 (WAL mode)",
-        "rppg_engine": "MediaPipe Face Landmarker (Sidecar)",
+        "rppg_engine": "Experimental MediaPipe camera estimator (requires Python)",
         "status": "operational"
     })
 }
@@ -73,12 +71,6 @@ fn rppg_status(state: State<AppState>) -> RppgStatus {
     state.rppg.get_status()
 }
 
-#[tauri::command]
-#[allow(dead_code)]
-fn ai_forecast_fatigue(input: SimulationInput) -> FatigueModelOutput {
-    calculate_fatigue_forecast(input)
-}
-
 use std::fs::OpenOptions;
 use std::io::Write;
 
@@ -123,8 +115,7 @@ pub fn run() {
             db_get_stats,
             rppg_start,
             rppg_stop,
-            rppg_status,
-            ai_forecast_fatigue
+            rppg_status
         ])
         .build(tauri::generate_context!())
         .expect("error while building ORBIT application");
@@ -135,6 +126,11 @@ pub fn run() {
             tauri::RunEvent::Ready => log_debug("Event: Ready"),
             tauri::RunEvent::WindowEvent { label, event, .. } => {
                 log_debug(&format!("Event: WindowEvent for '{}': {:?}", label, event));
+            }
+            tauri::RunEvent::Exit => {
+                if let Some(state) = _app_handle.try_state::<AppState>() {
+                    let _ = state.rppg.stop();
+                }
             }
             tauri::RunEvent::ExitRequested { code, api: _, .. } => {
                 log_debug(&format!("Event: ExitRequested with code: {:?}", code));

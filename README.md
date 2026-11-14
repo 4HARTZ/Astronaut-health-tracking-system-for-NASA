@@ -1,6 +1,6 @@
 # Orbit — Astronaut health check-in
 
-A React + Vite web-app prototype by team **4HARTZ**. Record basic health indicators, review trends, edit records, and import/export backups.
+A React + Vite browser app and Tauri desktop prototype by team **4HARTZ**. Record basic health indicators, review trends, edit records, and import/export backups.
 
 ## Run locally
 
@@ -13,7 +13,35 @@ npm run dev
 
 Open http://localhost:8080. Stop the server with Ctrl+C. Vite uses strict port 8080 to preserve the original app's browser storage address; stop an older Python server first if that port is occupied. The Python command no longer runs the source app because JSX needs Vite's transformation.
 
-## Existing records and backups
+## Browser and desktop capabilities
+
+| Feature | Browser | Tauri desktop |
+| --- | --- | --- |
+| Saved check-ins, charts, reports, JSON backups | IndexedDB | Local SQLite file |
+| Offline app files | Production service worker after setup | Bundled with the installed app |
+| Cognitive activities | Signal Watch and Position Match, saved separately | Not available in the SQLite workspace yet |
+| Breathing guide | Available, no results stored | Available, no results stored |
+| Real-time monitor | Clearly labelled synthetic demonstration | Demo plus experimental camera pulse estimator |
+| Data review and simulator | Saved values plus an illustrative curve | Same |
+| Login, cloud sync, encryption, Bluetooth/serial devices | Not implemented | Not implemented |
+
+The desktop app has a local Rust backend, not a remote server. Browser and desktop databases are separate: there is no automatic browser-to-SQLite migration or synchronization. Export/import measurement JSON to move records. The native repository has different import/conflict and revision behavior from the browser repository; do not assume the browser's stale-edit protection exists in native storage. Cognitive backups cannot be imported into SQLite.
+
+## Run or package the desktop app
+
+Install the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS, including Rust/Cargo. On macOS, install Xcode Command Line Tools. With npm dependencies installed:
+
+```bash
+npm run tauri -- dev
+npm run tauri -- build
+```
+
+Development opens a native window and starts Vite automatically; stop an existing port-8080 server first. The installed production app uses bundled files and needs no Vite server. Build on the target platform: macOS produces `.app` and `.dmg`; Windows produces an NSIS installer. Outputs are under `src-tauri/target/release/bundle/`. Signing and notarization for distribution are not configured by this prototype.
+
+Camera support is optional and needs a separate Python environment, even in a packaged app. The script and face model are bundled; Python and its libraries are not. See [desktop camera setup](docs/desktop-camera.md). Missing dependencies or denied camera permission produce an error, never synthetic measurements disguised as camera output.
+
+## Existing records and backups (browser)
+
 
 The app migrates the `orbit-health-v1` localStorage records into the local-only workspace in the `orbit-v2` IndexedDB database. Record fields and version 1 JSON backups remain compatible. Existing records migrate automatically in the same browser profile at the same origin, such as `http://localhost:8080`. `localhost` and `127.0.0.1`, different ports, and different browsers have separate storage. Export from the old address and import at the new address if needed.
 
@@ -46,19 +74,19 @@ Charts filter by inclusive local dates and measurement context and show up to 10
 
 This is a prototype, not a medical device. Entry limits are not clinical thresholds. There are no diagnoses, treatment recommendations, health scores, medical alerts, or baseline assessments. Future medical rules require qualified mission medical review. Basic readings cannot assess bone density, radiation dose, or immune function.
 
-Records and the local change journal remain unencrypted in IndexedDB. The original localStorage array is retained as a migration backup. Use synthetic data in development. There is no authentication, backend, cloud synchronization, or production security. Clearing browser data removes records. The app uses no external runtime assets, and production builds support installation and offline app-shell caching.
+Browser records and the local change journal remain unencrypted in IndexedDB; desktop check-ins are stored unencrypted in SQLite. The original localStorage array is retained as a migration backup. Use synthetic data in development. There is no authentication, remote backend, cloud synchronization, or production security. The desktop version has a local Rust backend. Clearing browser data removes records. The app uses no external runtime assets, and production builds support installation and offline app-shell caching.
 
 ## Manual acceptance
 
 Save partial measurements, reload to confirm persistence, cancel and save edits, confirm/cancel deletion, import an old export twice, reject malformed JSON, inspect charts and filters, export JSON, navigate by keyboard, and inspect a narrow viewport. Confirm a blocked/full storage error preserves inputs.
 
-## Next steps
+## Remaining work
 
-1. Measurement guidance and daily checklists.
-2. Installable offline app support.
-3. Printable reports and optional chart comparisons.
-4. Identity, encryption, privacy, and sharing requirements.
-5. Medically reviewed baseline and escalation protocols.
+1. Native build, installed-app, and camera testing on each target OS.
+2. Native cognitive-session persistence and browser/desktop storage parity.
+3. Identity, encryption, retention, privacy, and sharing requirements.
+4. Qualified review of any future clinical rules; no clinical scoring is enabled.
+5. Hardware sensor integration and a self-contained packaged camera runtime, if required.
 
 ## Guided daily workflow
 
@@ -101,7 +129,7 @@ Reports are snapshots of saved records at preview time. Generate a fresh preview
 
 See [the accounts and synchronization plan](docs/accounts-and-sync-plan.md) for proposed identity, access controls, encrypted local workspaces, offline synchronization, conflict handling, migration, and delivery milestones. This is a design plan; account login and cloud sync are not implemented yet.
 
-## Workspace storage foundation
+## Workspace storage foundation (browser)
 
 The local-only workspace now uses IndexedDB. Each save, edit, import, or delete commits a record change and a durable outbox entry in the same transaction. A journal count is displayed in the app. This is preparation for a future sync engine: no account exists, no journal entries are uploaded, and the queue is not automatically assigned to a future account.
 
@@ -126,3 +154,25 @@ Space to breathe replaces the earlier games and garden with a calm space backdro
 Circle movement and counting can be turned off. Reduced-motion preferences disable the expanding circle while text guidance remains. The guide is bundled for offline production use, records no activity or wellbeing data, and does not claim measured stress reduction or clinical validation. Interpretations and protocol review remain **Awaiting medical review**. Links inside the activity explain the NHS guidance and NCCIH evidence limitations; the interface and timing choices are Orbit adaptations, not a flight protocol or NASA endorsement.
 
 Previous cognitive-session storage is retained to preserve earlier results. Health data and reports remain separate and unchanged.
+
+
+## Data review and simulation
+
+The Data Review tab reads the latest dated saved check-in using the shared schema (`heartRate`, `quality`, etc.). Missing measurements display as not recorded; zero remains zero. Synthetic monitor readings never feed this view. Editing or adding a saved check-in resets the example controls to the latest saved sleep and quality, with labelled defaults when missing.
+
+The curve is a deliberately arbitrary demonstration in arbitrary units, not SAFTE, trained AI, clinical decision support, or a validated fatigue forecast. Clinical thresholds, medication checklists, NASA compliance claims, and EVA go/no-go output were removed from the previous advisory prototype. No automated diagnostic or operational-clearance IPC endpoint is exposed. The separate educational observations panel still carries its review status.
+
+## Cognitive activities and breathing
+
+Both features are present: the Cognitive tab offers browser-only Signal Watch and Position Match. The breathing guide appears separately, stores no results, and supports optional holds, pause, stop, and reduced motion. These are not fitness-for-duty assessments. See [activity specification](docs/cognitive-activities.md).
+
+Theme preferences persist locally; the editable crew profile is currently session state, not an authenticated identity. Settings links to the Vitals history for unencrypted measurement backups. The local journal is not included in those exports.
+
+## Additional checks
+
+```bash
+python3 tests/rppg_test.py
+cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+The Python tests use only the standard library and do not access the camera. Rust checks require the desktop toolchain. Browser tests cover advisory record mapping, missing values, simulator updates, camera event ordering, cleanup, and failure states using a mocked desktop bridge; they do not validate camera accuracy or a signed installer.

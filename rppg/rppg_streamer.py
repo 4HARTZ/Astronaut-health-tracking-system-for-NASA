@@ -14,7 +14,6 @@ os.environ["MPLCONFIGDIR"] = tempfile.gettempdir()
 import time
 import json
 import argparse
-import numpy as np
 
 # Set stdout to unbuffered utf-8
 if sys.platform == "win32":
@@ -39,18 +38,25 @@ def main():
         "message": "Initializing rPPG optical telemetry engine..."
     })
 
-    # Try importing OpenCV and MediaPipe
     try:
+        import numpy as np
+    except ImportError as e:
+        emit({"type": "error", "state": "error", "message": f"Missing NumPy: {e}. Install rppg/requirements.txt in the selected Python environment."})
+        return 1
+
+    # Camera errors never silently select synthetic data.
+    try:
+        if args.simulate:
+            raise RuntimeError("Explicit demonstration mode")
         import cv2
         import mediapipe as mp
         from mediapipe.tasks import python
         from mediapipe.tasks.python import vision
         has_cv = True
     except Exception as e:
-        emit({
-            "type": "error",
-            "message": f"Computer vision libraries missing or failed: {e}. Switching to simulation."
-        })
+        if not args.simulate:
+            emit({"type": "error", "state": "error", "message": f"Camera libraries unavailable: {e}. Install rppg/requirements.txt in the selected Python environment."})
+            return 1
         has_cv = False
 
     # Check for model file
@@ -80,31 +86,28 @@ def main():
             if not cap.isOpened():
                 emit({
                     "type": "warning",
-                    "message": f"Could not open physical camera {cam_id}. Entering optical simulation mode."
+                    "message": f"Could not open camera {cam_id}. Check camera permissions and whether another app is using it."
                 })
+                cap.release()
                 cap = None
         except Exception as e:
             emit({
                 "type": "warning",
-                "message": f"Hardware camera initialization failed: {e}. Entering optical simulation mode."
+                "message": f"Camera initialization failed: {e}."
             })
             cap = None
 
-    # Status update
-    if cap is not None and cap.isOpened():
-        emit({
-            "type": "status",
-            "state": "active",
-            "source": f"Hardware Camera ({args.camera})",
-            "message": "Camera optical feed locked. Face tracking active."
-        })
-    else:
-        emit({
-            "type": "status",
-            "state": "active",
-            "source": "Physiological Signal Synthesizer (Nominal)",
-            "message": "Simulating high-precision facial capillary pulse stream."
-        })
+    if not args.simulate and (cap is None or not cap.isOpened()):
+        if detector is not None:
+            detector.close()
+        emit({"type": "error", "state": "error", "message": "Camera unavailable or model missing. Check camera permission, dependencies, and face_landmarker.task. No measurements were generated."})
+        return 1
+
+    emit({
+        "type": "status", "state": "active", "simulated": args.simulate,
+        "source": "Simulation" if args.simulate else "Experimental camera",
+        "message": "DEMO: synthetic values, not measurements." if args.simulate else "Camera opened. Pulse estimates are experimental and unvalidated."
+    })
 
     # Signal processing buffers
     buffer_len = 120  # ~4 seconds of 30 fps
@@ -116,7 +119,7 @@ def main():
     fps_timer = time.time()
     current_fps = 30.0
 
-    target_bpm = 71.0
+    target_bpm = 71.0 if args.simulate else None
 
     try:
         while True:
@@ -131,8 +134,8 @@ def main():
             if cap is not None and cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
-                    time.sleep(0.033)
-                    continue
+                    emit({"type": "error", "state": "error", "message": "Camera stopped delivering frames. No new measurement is available."})
+                    return 1
 
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
@@ -189,16 +192,20 @@ def main():
                                 "type": "telemetry",
                                 "timestamp": round(elapsed, 3),
                                 "faceDetected": True,
-                                "confidence": 0.96,
+                                "simulated": False,
+                                "confidence": None,
                                 "fps": current_fps,
                                 "r": round(float(r), 1),
                                 "g": round(float(g), 1),
                                 "b": round(float(b), 1),
                                 "estimatedBpm": target_bpm,
-                                "snr": 1.85,
+                                "snr": None,
                                 "pulseValue": round(float(g - np.mean(green_buffer)), 2) if len(green_buffer) > 10 else 0.0,
                             })
                 else:
+                    green_buffer.clear()
+                    time_buffer.clear()
+                    target_bpm = None
                     if now - last_emit >= 0.2:
                         last_emit = now
                         emit({
@@ -233,13 +240,14 @@ def main():
                         "type": "telemetry",
                         "timestamp": round(elapsed, 3),
                         "faceDetected": True,
-                        "confidence": 0.98,
+                        "simulated": True,
+                        "confidence": None,
                         "fps": 30.0,
                         "r": round(float(r_val), 1),
                         "g": round(float(g_val), 1),
                         "b": round(float(b_val), 1),
                         "estimatedBpm": current_bpm,
-                        "snr": 2.1,
+                        "snr": None,
                         "pulseValue": round(float(pulse * 10.0), 2),
                     })
 
@@ -253,4 +261,4 @@ def main():
         emit({"type": "status", "state": "stopped", "message": "rPPG optical stream terminated."})
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)

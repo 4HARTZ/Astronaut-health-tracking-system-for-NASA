@@ -11,3 +11,8 @@ orbit_runtime_log.txt
 # Local presentation artifacts and generation files
 /.pitch-build/
 /presentations/
+
+# Local camera Python environment
+.venv-rppg/
+__pycache__/
+*.pyc

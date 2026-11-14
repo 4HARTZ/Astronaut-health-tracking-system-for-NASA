@@ -31,20 +31,27 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "nsis"
-    ],
+    "targets": "all",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
-      "icons/icon.ico"
+      "icons/icon.ico",
+      "icons/icon.icns"
     ],
     "windows": {
       "nsis": {
         "displayLanguageSelector": false,
         "installMode": "currentUser"
       }
+    },
+    "resources": {
+      "../rppg/rppg_streamer.py": "rppg/rppg_streamer.py",
+      "../rppg/face_landmarker.task": "rppg/face_landmarker.task"
+    },
+    "macOS": {
+      "infoPlist": "Info.plist",
+      "entitlements": "Entitlements.plist"
     }
   }
 }

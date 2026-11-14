@@ -85,6 +85,11 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
         }
         repoRef.current = repo;
         setEntries(snapshot.entries);
+        setStoreEntries(snapshot.entries);
+        if (snapshot.stats) {
+          setDbStats(snapshot.stats);
+          setStoreStorageStats(snapshot.stats);
+        }
         revisions.current = snapshot.revisions;
         setPending(snapshot.pending);
         setLoading(false);
@@ -288,7 +293,7 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
                   className="!py-2 !px-3 !text-xs !bg-[#212c3d] !border-[#3d4f68] !text-[#c6d4df] hover:!text-white rounded-[3px] flex items-center gap-1.5"
                 >
                   <Activity className="w-3.5 h-3.5 text-[#66c0f4]" />
-                  <span>Live Waveform</span>
+                  <span>Monitor Demo</span>
                 </button>
                 <button
                   type="button"
@@ -296,7 +301,7 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
                   className="!py-2 !px-3 !text-xs !bg-[#212c3d] !border-[#3d4f68] !text-[#c6d4df] hover:!text-white rounded-[3px] flex items-center gap-1.5"
                 >
                   <Brain className="w-3.5 h-3.5 text-[#a4d007]" />
-                  <span>PVT Reaction Test</span>
+                  <span>Cognitive Activities</span>
                 </button>
                 <button
                   type="button"
@@ -304,7 +309,7 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
                   className="!py-2 !px-3 !text-xs !bg-[#212c3d] !border-[#3d4f68] !text-[#c6d4df] hover:!text-white rounded-[3px] flex items-center gap-1.5"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-[#e58e26]" />
-                  <span>AI Advisory &amp; SAFTE</span>
+                  <span>Data Review &amp; Simulation</span>
                 </button>
               </div>
             </div>
@@ -333,7 +338,7 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
                 </div>
                 <div>
                   <div className="text-[10px] font-mono text-[#8f98a0] uppercase tracking-wider">Autonomous Vault</div>
-                  <div className="text-xs font-bold text-[#a4d007] font-mono">100% Local · SQLite</div>
+                  <div className="text-xs font-bold text-[#a4d007] font-mono">Local · {dbStats?.isNativeSqlite ? 'SQLite' : 'IndexedDB'}</div>
                 </div>
               </div>
 
@@ -344,7 +349,7 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
                 </div>
                 <div>
                   <div className="text-[10px] font-mono text-[#8f98a0] uppercase tracking-wider">Sensor Interface</div>
-                  <div className="text-xs font-bold text-white font-mono">rPPG &amp; BLE Standby</div>
+                  <div className="text-xs font-bold text-white font-mono">Camera prototype · BLE unavailable</div>
                 </div>
               </div>
             </div>
@@ -393,7 +398,11 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
         {/* FEATURE 3: Cognitive Fitness & Mental Health Mini-Games */}
         {showCognitive && !isTestEnv && (
           <div id="cognitive-section" className="space-y-6">
-            <CognitiveGames repository={repoRef.current} onSaved={refresh} />
+            {typeof repoRef.current?.cognitiveSessions === 'function' ? (
+              <CognitiveGames repository={repoRef.current} onSaved={refresh} />
+            ) : (
+              <p role="status">Cognitive activities require browser storage and are not available in the desktop SQLite workspace yet. Health check-ins remain available.</p>
+            )}
           </div>
         )}
 
@@ -463,7 +472,7 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
           </div>
         )}
 
-        {/* FEATURE 6: Medical AI & Alertness Forecast */}
+        {/* FEATURE 6: Recorded Data Review & Illustrative Simulation */}
         {showAdvisory && (
           <div id="advisory-section" className="space-y-6">
             <MedicalAiAdvisory entries={entries} />
@@ -497,7 +506,7 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
         {/* FEATURE 7: System Settings & Preferences */}
         {showSettings && (
           <div id="settings-section" className="space-y-6">
-            <SettingsPanel entries={entries} />
+            <SettingsPanel entries={entries} onOpenHistory={() => setActiveTab('vitals')} />
           </div>
         )}
       </main>

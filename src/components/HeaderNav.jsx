@@ -66,7 +66,7 @@ export default function HeaderNav({ activeTab, onSelectTab, pendingCount, storag
     { id: 'realtime', label: 'Real-Time', icon: Activity },
     { id: 'cognitive', label: 'Cognitive', icon: Brain },
     { id: 'analytics', label: 'Analytics', icon: LineChart },
-    { id: 'advisory', label: 'AI Advisory', icon: Sparkles },
+    { id: 'advisory', label: 'Data Review', icon: Sparkles },
     { id: 'reports', label: 'Reports', icon: FileText },
   ];
 

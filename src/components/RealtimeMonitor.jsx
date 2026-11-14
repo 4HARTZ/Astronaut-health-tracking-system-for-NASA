@@ -10,95 +10,112 @@ import {
 } from 'lucide-react';
 import { useHealthStore } from '../store/useHealthStore.js';
 
-export default function RealtimeMonitor() {
+async function loadCameraApi() {
+  const { invoke } = await import('@tauri-apps/api/core');
+  const { listen } = await import('@tauri-apps/api/event');
+  return { invoke, listen };
+}
+
+export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop = Boolean(globalThis.window?.__TAURI_INTERNALS__) }) {
   const [isRunning, setIsRunning] = useState(true);
   const [heartRate, setHeartRate] = useState(68);
   const [spO2, setSpO2] = useState(98);
   const [respiration, setRespiration] = useState(14);
   const [rppgConnected, setRppgConnected] = useState(false);
   const [rppgTelemetry, setRppgTelemetry] = useState(null);
-  const [rppgStatusMsg, setRppgStatusMsg] = useState('Standby · Click to connect camera');
+  const [rppgStatusMsg, setRppgStatusMsg] = useState('Demo mode. No sensor is connected.');
+  const [cameraPending, setCameraPending] = useState(false);
+  const [cameraMode, setCameraMode] = useState(false);
   
   const canvasRef = useRef(null);
   const unlistenRef = useRef(null);
   const livePulseRef = useRef(0);
   const setStoreLiveVitals = useHealthStore((s) => s.setLiveVitals);
 
-  // Toggle rPPG sidecar process
+  const session = useRef(0);
+  const activeApi = useRef(null);
+  function detachListeners() {
+    unlistenRef.current?.();
+    unlistenRef.current = null;
+  }
   async function toggleRppg() {
-    const isTauri = typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__);
-
-    if (!rppgConnected) {
-      if (isTauri) {
-        try {
-          const { invoke } = await import('@tauri-apps/api/core');
-          const { listen } = await import('@tauri-apps/api/event');
-
-          setRppgStatusMsg('Starting MediaPipe optical sidecar...');
-          await invoke('rppg_start', { camera: "0" });
-
-          const unlisten = await listen('rppg-telemetry', (event) => {
-            const data = event.payload;
-            if (data.faceDetected) {
-              setHeartRate(Math.round(data.estimatedBpm || 72));
-              setRppgTelemetry(data);
-              setRppgStatusMsg(`Face locked · R:${data.r} G:${data.g} B:${data.b} · SNR:${data.snr}`);
-              if (data.pulseValue != null) {
-                livePulseRef.current = data.pulseValue;
-              }
-            } else {
-              setRppgStatusMsg('Searching for astronaut face...');
-            }
-          });
-
-          unlistenRef.current = unlisten;
-          setRppgConnected(true);
-        } catch (err) {
-          console.warn('Tauri rPPG sidecar start error:', err);
-          setRppgStatusMsg(`Error: ${err}`);
+    if (!isDesktop || cameraPending) return;
+    if (rppgConnected) {
+      try {
+        await activeApi.current?.invoke('rppg_stop');
+        session.current++;
+        detachListeners();
+        setRppgConnected(false);
+        setRppgTelemetry(null);
+        setHeartRate(null);
+        livePulseRef.current = 0;
+        setRppgStatusMsg('Camera stopped. No current measurement.');
+      } catch (err) { setRppgStatusMsg(`Could not stop camera: ${err}`); }
+      return;
+    }
+    const token = ++session.current;
+    setCameraPending(true);
+    setCameraMode(true);
+    setHeartRate(null);
+    setRppgTelemetry(null);
+    livePulseRef.current = 0;
+    setRppgStatusMsg('Starting camera…');
+    const listeners = [];
+    try {
+      const api = await cameraApi();
+      if (token !== session.current) return;
+      activeApi.current = api;
+      detachListeners();
+      listeners.push(await api.listen('rppg-status', ({ payload: data }) => {
+        if (token !== session.current) return;
+        setRppgStatusMsg(data.message || 'Camera status changed.');
+        if (data.state === 'active') {
+          setRppgConnected(!data.simulated);
+          setCameraPending(false);
         }
-      } else {
-        // Web / simulation preview fallback
-        setRppgConnected(true);
-        setRppgStatusMsg('Optical stream active (Synthesized capillary signal)');
-      }
-    } else {
-      if (isTauri) {
-        try {
-          const { invoke } = await import('@tauri-apps/api/core');
-          await invoke('rppg_stop');
-        } catch (err) {
-          console.warn('Tauri rPPG stop error:', err);
+        if (['error', 'stopped'].includes(data.state)) {
+          setRppgConnected(false); setCameraPending(false);
+          setHeartRate(null); setRppgTelemetry(null); livePulseRef.current = 0;
         }
-      }
-      if (unlistenRef.current) {
-        unlistenRef.current();
-        unlistenRef.current = null;
-      }
-      setRppgConnected(false);
-      setRppgTelemetry(null);
-      setRppgStatusMsg('Standby · Disconnected');
+      }));
+      listeners.push(await api.listen('rppg-telemetry', ({ payload: data }) => {
+        if (token !== session.current) return;
+        const measured = !data.simulated && data.faceDetected;
+        setHeartRate(measured && Number.isFinite(data.estimatedBpm) ? Math.round(data.estimatedBpm) : null);
+        setRppgTelemetry(measured ? data : null);
+        livePulseRef.current = measured && Number.isFinite(data.pulseValue) ? data.pulseValue : 0;
+        setRppgStatusMsg(data.simulated ? 'Synthetic stream rejected: no camera measurement.' : measured ? 'Experimental camera feed. Pulse estimate is unvalidated.' : 'No face detected. No current measurement.');
+      }));
+      if (token !== session.current) { listeners.forEach(fn => fn()); return; }
+      unlistenRef.current = () => listeners.forEach(fn => fn());
+      await api.invoke('rppg_start', { camera: '0' });
+    } catch (err) {
+      listeners.forEach(fn => fn());
+      if (token !== session.current) return;
+      unlistenRef.current = null;
+      setRppgConnected(false); setCameraPending(false);
+      setRppgStatusMsg(`Camera unavailable: ${err}`);
     }
   }
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (unlistenRef.current) unlistenRef.current();
-    };
+  useEffect(() => () => {
+    session.current++;
+    unlistenRef.current?.();
+    activeApi.current?.invoke('rppg_stop').catch(() => {});
   }, []);
 
   // Update Zustand global store
   useEffect(() => {
     setStoreLiveVitals({
       heartRate,
-      spO2,
-      respiration,
-      perfusionIndex: 4.8,
+      spO2: cameraMode ? null : spO2,
+      respiration: cameraMode ? null : respiration,
+      perfusionIndex: cameraMode ? null : 4.8,
+      simulated: !cameraMode,
       isStreaming: isRunning,
-      leadStatus: rppgConnected ? 'rPPG Optical Active' : 'Simulated Lead II',
+      leadStatus: cameraMode ? 'Experimental camera; unavailable without a face signal' : 'Demonstration only',
     });
-  }, [heartRate, spO2, respiration, isRunning, rppgConnected, setStoreLiveVitals]);
+  }, [heartRate, spO2, respiration, isRunning, rppgConnected, cameraMode, setStoreLiveVitals]);
 
   // Draw smooth real-time simulated ECG/PPG telemetry on HTML5 Canvas
   useEffect(() => {
@@ -135,7 +152,7 @@ export default function RealtimeMonitor() {
       const cycle = step % 60;
       let val = 0;
 
-      if (rppgConnected && livePulseRef.current) {
+      if (cameraMode) {
         // Direct rPPG pulse wave
         val = livePulseRef.current * 3.5;
       } else {
@@ -192,7 +209,7 @@ export default function RealtimeMonitor() {
       ctx.fill();
 
       // Subtle vital fluctuations when in pure simulation mode
-      if (!rppgConnected && step % 40 === 0) {
+      if (!cameraMode && step % 40 === 0) {
         setHeartRate(prev => Math.min(85, Math.max(62, prev + Math.floor((Math.random() - 0.5) * 3))));
       }
 
@@ -204,7 +221,7 @@ export default function RealtimeMonitor() {
     }
 
     return () => caf(animationFrameId);
-  }, [isRunning, rppgConnected]);
+  }, [isRunning, rppgConnected, cameraMode]);
 
   return (
     <section className="space-y-6">
@@ -213,9 +230,10 @@ export default function RealtimeMonitor() {
         <div>
           <span className="text-[11px] font-mono uppercase tracking-wider text-[#66c0f4] font-bold flex items-center gap-2">
             <Activity className="w-4 h-4 text-[#66c0f4]" />
-            {rppgConnected ? 'LIVE rPPG OPTICAL WAVEFORM · FACIAL CAPILLARY PULSE' : 'LIVE TELEMETRY STREAM · LEAD II'}
+            {cameraMode ? 'EXPERIMENTAL CAMERA · UNVALIDATED' : 'DEMONSTRATION · SYNTHETIC WAVEFORM'}
           </span>
-          <h2 className="text-xl font-bold text-white mt-1">Real-Time Physiological Telemetry</h2>
+          <h2 className="text-xl font-bold text-white mt-1">Real-Time Monitor Prototype</h2>
+          <p className="text-xs mt-2">Demo values are synthetic and are never saved as check-ins. Camera mode estimates pulse only; it does not measure oxygen saturation, respiration, or perfusion.</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -238,10 +256,10 @@ export default function RealtimeMonitor() {
         <div className="flex justify-between items-center mb-3 px-1">
           <span className="text-xs font-mono text-[#8f98a0] flex items-center gap-2">
             <span className={`w-2.5 h-2.5 rounded-full ${rppgConnected ? 'bg-[#a4d007]' : 'bg-[#66c0f4]'}`}></span>
-            {rppgConnected ? 'SOURCE: rPPG GREEN PULSE (530nm)' : 'SWEEP: 25 mm/s · GAIN: 10 mm/mV'}
+            {cameraMode ? 'SOURCE: EXPERIMENTAL CAMERA' : 'SOURCE: SYNTHETIC DEMO'}
           </span>
           <span className={`text-xs font-mono ${rppgConnected ? 'text-[#a4d007]' : 'text-[#66c0f4]'} font-semibold`}>
-            {rppgConnected ? 'SIGNAL QUALITY: OPTICAL LOCK' : 'SIGNAL QUALITY: NOMINAL (99.4%)'}
+            {cameraMode ? 'SIGNAL QUALITY: NOT VALIDATED' : 'NO SENSOR CONNECTED'}
           </span>
         </div>
 
@@ -258,40 +276,40 @@ export default function RealtimeMonitor() {
             <div className="text-[11px] uppercase font-mono text-[#8f98a0]">Heart Rate</div>
             <div className="flex items-baseline gap-2 mt-1">
               <span className={`text-3xl font-bold font-mono ${rppgConnected ? 'text-[#a4d007]' : 'text-[#66c0f4]'}`}>
-                {heartRate}
+                {heartRate ?? '—'}
               </span>
               <span className="text-xs text-[#8f98a0] font-mono">BPM</span>
             </div>
             <div className="text-xs text-[#a4d007] mt-1.5 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" /> {rppgConnected ? 'Optical Plethysmograph' : 'Sinus Rhythm'}
+              <CheckCircle2 className="w-3.5 h-3.5" /> {cameraMode ? 'Unvalidated estimate' : 'Demo value'}
             </div>
           </div>
 
           <div className="p-3.5 rounded-[3px] bg-[#1e2633] border border-[#2a475e]">
             <div className="text-[11px] uppercase font-mono text-[#8f98a0]">Oxygen Saturation</div>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-3xl font-bold font-mono text-[#a4d007]">{spO2}</span>
+              <span className="text-3xl font-bold font-mono text-[#a4d007]">{cameraMode ? '—' : spO2}</span>
               <span className="text-xs text-[#8f98a0] font-mono">% SpO₂</span>
             </div>
-            <div className="text-xs text-[#8f98a0] mt-1.5">Target &gt; 95%</div>
+            <div className="text-xs text-[#8f98a0] mt-1.5">{cameraMode ? 'Not measured' : 'Demo value'}</div>
           </div>
 
           <div className="p-3.5 rounded-[3px] bg-[#1e2633] border border-[#2a475e]">
             <div className="text-[11px] uppercase font-mono text-[#8f98a0]">Respiration Rate</div>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-3xl font-bold font-mono text-[#66c0f4]">{respiration}</span>
+              <span className="text-3xl font-bold font-mono text-[#66c0f4]">{cameraMode ? '—' : respiration}</span>
               <span className="text-xs text-[#8f98a0] font-mono">BrPM</span>
             </div>
-            <div className="text-xs text-[#8f98a0] mt-1.5">Quiet breathing</div>
+            <div className="text-xs text-[#8f98a0] mt-1.5">{cameraMode ? 'Not measured' : 'Demo value'}</div>
           </div>
 
           <div className="p-3.5 rounded-[3px] bg-[#1e2633] border border-[#2a475e]">
             <div className="text-[11px] uppercase font-mono text-[#8f98a0]">Perfusion Index</div>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-3xl font-bold font-mono text-[#c6d4df]">4.8</span>
+              <span className="text-3xl font-bold font-mono text-[#c6d4df]">{cameraMode ? '—' : '4.8'}</span>
               <span className="text-xs text-[#8f98a0] font-mono">PI %</span>
             </div>
-            <div className="text-xs text-[#a4d007] mt-1.5">Adequate perfusion</div>
+            <div className="text-xs text-[#a4d007] mt-1.5">{cameraMode ? 'Not measured' : 'Demo value'}</div>
           </div>
         </div>
       </div>
@@ -324,13 +342,14 @@ export default function RealtimeMonitor() {
             <button
               type="button"
               onClick={toggleRppg}
+              disabled={!isDesktop || cameraPending}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-[3px] transition ${
                 rppgConnected
                   ? '!bg-[#d9534f]/20 !text-[#d9534f] !border-[#d9534f]/40'
                   : '!bg-[#212c3d] !text-[#66c0f4] !border-[#3d4f68] hover:!text-white'
               }`}
             >
-              {rppgConnected ? 'Disconnect rPPG' : 'Connect rPPG Feed'}
+              {!isDesktop ? 'Camera requires desktop app' : cameraPending ? 'Starting camera…' : rppgConnected ? 'Disconnect rPPG' : 'Connect rPPG Feed'}
             </button>
           </div>
         </div>
@@ -343,22 +362,22 @@ export default function RealtimeMonitor() {
               <h3 className="text-sm font-bold text-white m-0">Wearable &amp; Hardware Sensor Hub</h3>
             </div>
             <span className="px-2.5 py-1 rounded-[3px] text-[10px] font-mono bg-[#5c7e10]/30 text-[#a4d007] border border-[#a4d007]/40">
-              BLE READY
+              NOT IMPLEMENTED
             </span>
           </div>
 
           <p className="text-xs text-[#8f98a0] leading-relaxed m-0">
-            Direct serial / Bluetooth Low Energy channel for astronaut vital patches, pulse oximeters, and flight biomedical harnesses.
+            Placeholder for a future hardware integration. No Bluetooth or serial device is connected by this prototype.
           </p>
 
           <div className="space-y-2 text-xs font-mono">
             <div className="flex items-center justify-between p-2.5 rounded-[3px] bg-[#101822] border border-[#2a475e]">
               <span className="text-[#c6d4df]">Crew Wearable Vital Patch (BLE #1)</span>
-              <span className="text-[#a4d007]">98% Battery · 0ms Latency</span>
+              <span className="text-[#a4d007]">Example device · not connected</span>
             </div>
             <div className="flex items-center justify-between p-2.5 rounded-[3px] bg-[#101822] border border-[#2a475e]">
               <span className="text-[#c6d4df]">Digital Pulse Oximeter (USB-Serial)</span>
-              <span className="text-[#a4d007]">Port COM3 · Locked</span>
+              <span className="text-[#a4d007]">Example device · not connected</span>
             </div>
           </div>
         </div>

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useHealthStore } from '../store/useHealthStore.js';
 
-export default function SettingsPanel({ entries = [], onExportBackup }) {
+export default function SettingsPanel({ entries = [], onOpenHistory }) {
   const [activeSection, setActiveSection] = useState('preferences'); // 'preferences' | 'profile' | 'security'
   const theme = useHealthStore((s) => s.theme);
   const setTheme = useHealthStore((s) => s.setTheme);
@@ -307,36 +307,37 @@ export default function SettingsPanel({ entries = [], onExportBackup }) {
             <div className="p-4 rounded-[3px] bg-[#16202d] border border-[#2a475e] space-y-1">
               <div className="text-[10.5px] font-mono text-[#8f98a0] uppercase">Storage Engine</div>
               <div className="text-sm font-bold text-white font-mono">SQLite 3 / IndexedDB</div>
-              <div className="text-xs text-[#a4d007] font-mono">Air-gapped WAL Journal</div>
+              <div className="text-xs text-[#a4d007] font-mono">Stored on this device</div>
             </div>
 
             <div className="p-4 rounded-[3px] bg-[#16202d] border border-[#2a475e] space-y-1">
               <div className="text-[10.5px] font-mono text-[#8f98a0] uppercase">Saved Check-Ins</div>
               <div className="text-sm font-bold text-white font-mono">{entries.length} Records</div>
-              <div className="text-xs text-[#66c0f4] font-mono">All verified locally</div>
+              <div className="text-xs text-[#66c0f4] font-mono">Saved records</div>
             </div>
 
             <div className="p-4 rounded-[3px] bg-[#16202d] border border-[#2a475e] space-y-1">
               <div className="text-[10.5px] font-mono text-[#8f98a0] uppercase">Cloud Telemetry Uplink</div>
               <div className="text-sm font-bold text-[#a4d007] font-mono">Zero Uplink (0 KB)</div>
-              <div className="text-xs text-[#8f98a0] font-mono">100% Privacy Enclave</div>
+              <div className="text-xs text-[#8f98a0] font-mono">Unencrypted local storage</div>
             </div>
           </div>
 
           <div className="p-4 rounded-[3px] bg-[#101822] border border-[#2a475e] flex flex-wrap items-center justify-between gap-4">
             <div>
-              <strong className="text-xs text-white block">Download Encrypted JSON Archive</strong>
+              <strong className="text-xs text-white block">Export JSON Backup (Unencrypted)</strong>
               <span className="text-[11px] text-[#8f98a0]">
-                Generates a timestamped JSON backup file containing all physiological logs and revisions.
+                Generates a timestamped JSON backup file containing saved check-ins. The change journal is not included.
               </span>
             </div>
-            <a
-              href="#history"
+            <button
+              onClick={onOpenHistory}
+              type="button"
               className="px-3.5 py-1.5 rounded-[3px] bg-[#212c3d] text-[#66c0f4] border border-[#3d4f68] hover:text-white text-xs font-semibold flex items-center gap-1.5"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Go to History &amp; Backup ↗</span>
-            </a>
+            </button>
           </div>
         </div>
       )}
