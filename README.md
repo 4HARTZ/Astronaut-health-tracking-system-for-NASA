@@ -126,3 +126,9 @@ Space to breathe replaces the earlier games and garden with a calm space backdro
 Circle movement and counting can be turned off. Reduced-motion preferences disable the expanding circle while text guidance remains. The guide is bundled for offline production use, records no activity or wellbeing data, and does not claim measured stress reduction or clinical validation. Interpretations and protocol review remain **Awaiting medical review**. Links inside the activity explain the NHS guidance and NCCIH evidence limitations; the interface and timing choices are Orbit adaptations, not a flight protocol or NASA endorsement.
 
 Previous cognitive-session storage is retained to preserve earlier results. Health data and reports remain separate and unchanged.
+
+## Optical waveform preview versus camera stream
+
+The Real-time deck plots incoming native `rppg-telemetry` pulse values as a green, relatively scaled optical trace. Zero samples remain valid; lost face detection or a stream timeout clears the signal instead of substituting an ECG waveform. No quality or clinical validity is inferred from samples arriving. Camera estimates can be absent while a waveform is present.
+
+The browser cannot invoke the Python camera sidecar. **Preview optical demo** shows an explicitly simulated optical-style waveform and labeled demo values, without publishing those values as measured vitals. Native camera rPPG does not supply SpO2, respiration or perfusion-index values in the current payload, so those remain unavailable. The wearable panel remains not connected until a real integration exists. The teammate-owned `rppg/` pipeline is unchanged.
