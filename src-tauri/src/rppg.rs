@@ -31,22 +31,50 @@ fn script_path(resource_dir: Option<PathBuf>) -> Result<PathBuf, String> {
         .ok_or_else(|| "Camera script is missing from the application resources. Rebuild Orbit.".into())
 }
 
-fn python_command() -> Command {
-    if let Some(python) = std::env::var_os("ORBIT_PYTHON") {
-        return Command::new(python);
+fn configured_python(explicit: Option<PathBuf>, config: Option<&Path>) -> Result<Option<PathBuf>, String> {
+    let python = if explicit.is_some() {
+        explicit
+    } else if let Some(file) = config.filter(|file| file.is_file()) {
+        Some(serde_json::from_slice::<PathBuf>(&std::fs::read(file).map_err(|e| e.to_string())?)
+            .map_err(|e| format!("Cannot read saved camera Python: {e}. Launch once with ORBIT_PYTHON to replace it."))?)
+    } else {
+        None
+    };
+    if let Some(path) = &python {
+        // Do not canonicalize: resolving a venv symlink can lose its environment.
+        if !path.is_absolute() || !path.is_file() {
+            return Err("Camera Python path is unavailable. Launch once with ORBIT_PYTHON set to the full path of your working environment.".into());
+        }
+    }
+    Ok(python)
+}
+
+fn remember_python(file: &Path, python: &Path) -> Result<(), String> {
+    if !python.is_absolute() { return Ok(()); }
+    let parent = file.parent().ok_or("Camera configuration has no directory")?;
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let temporary = file.with_extension("tmp");
+    std::fs::write(&temporary, serde_json::to_vec(python).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    std::fs::rename(temporary, file).map_err(|e| e.to_string())
+}
+
+fn python_command(config: Option<&Path>) -> Result<Command, String> {
+    if let Some(python) = configured_python(std::env::var_os("ORBIT_PYTHON").map(PathBuf::from), config)? {
+        return Ok(Command::new(python));
     }
     // Prefer the documented project environment during development.
     if cfg!(debug_assertions) {
         let env_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.venv-rppg");
         let python = env_dir.join(if cfg!(windows) { "Scripts/python.exe" } else { "bin/python" });
-        if python.is_file() { return Command::new(python); }
+        if python.is_file() { return Ok(Command::new(python)); }
     }
     if cfg!(windows) {
         let mut command = Command::new("py");
         command.arg("-3");
-        command
+        Ok(command)
     } else {
-        Command::new("python3")
+        Ok(Command::new("python3"))
     }
 }
 
@@ -55,7 +83,9 @@ impl RppgManager {
         let mut slot = self.child.lock().map_err(|e| e.to_string())?;
         if slot.is_some() { return Ok(()); }
         let script = script_path(app.path().resource_dir().ok())?;
-        let mut command = python_command();
+        let config = app.path().app_config_dir().ok().map(|dir| dir.join("camera-python.json"));
+        let mut command = python_command(config.as_deref())?;
+        let interpreter = PathBuf::from(command.get_program());
         command.arg("-u").arg(&script).arg("--model")
             .arg(script.with_file_name("face_landmarker.task"))
             .arg("--camera").arg(camera.unwrap_or_else(|| "0".into()))
@@ -88,6 +118,16 @@ impl RppgManager {
                     match json.get("type").and_then(|v| v.as_str()).unwrap_or("") {
                         "telemetry" => { let _ = app.emit("rppg-telemetry", &json); }
                         "status" | "error" | "warning" => {
+                            // Remember only after dependencies, model and camera opened.
+                            // Finder launches can then use the same environment without
+                            // needing terminal environment variables or changing PATH.
+                            if json["state"] == "active" && json["simulated"] == false {
+                                if let Some(file) = &config {
+                                    if let Err(message) = remember_python(file, &interpreter) {
+                                        let _ = app.emit("rppg-diagnostic", format!("Could not remember camera Python: {message}"));
+                                    }
+                                }
+                            }
                             if let Some(message) = json.get("message").and_then(|v| v.as_str()) {
                                 if let Ok(mut s) = status.lock() { s.message = message.into(); }
                                 if json["type"] == "error" { error = Some(message.to_string()); }
@@ -141,6 +181,27 @@ mod tests {
         std::fs::create_dir_all(dir.join("rppg")).unwrap();
         std::fs::write(dir.join("rppg/rppg_streamer.py"), "# fixture").unwrap();
         assert_eq!(script_path(Some(dir.clone())).unwrap(), dir.join("rppg/rppg_streamer.py"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn finder_launch_reuses_saved_interpreter_and_explicit_override_wins() {
+        let dir = std::env::temp_dir().join(format!("orbit-python-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let python = dir.join("python with spaces");
+        let replacement = dir.join("replacement python");
+        std::fs::write(&python, "fixture").unwrap();
+        std::fs::write(&replacement, "fixture").unwrap();
+        let config = dir.join("config/camera-python.json");
+        assert_eq!(configured_python(None, Some(&config)).unwrap(), None);
+        remember_python(&config, &python).unwrap();
+        assert_eq!(configured_python(None, Some(&config)).unwrap(), Some(python.clone()));
+        assert_eq!(configured_python(Some(replacement.clone()), Some(&config)).unwrap(), Some(replacement.clone()));
+        std::fs::remove_file(&python).unwrap();
+        assert!(configured_python(None, Some(&config)).is_err());
+        assert!(configured_python(Some(PathBuf::from("relative/python")), Some(&config)).is_err());
+        remember_python(&config, &replacement).unwrap();
+        assert_eq!(configured_python(None, Some(&config)).unwrap(), Some(replacement));
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

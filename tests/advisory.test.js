@@ -43,3 +43,33 @@ test('empty review reports no assessment and labels simulation explicitly', () =
   assert.ok(screen.getByText(/Unvalidated demonstration/));
   assert.equal(screen.getByLabelText(/Example sleep duration/).value, '8');
 });
+
+test('warning panel separates urgent reference checks from learning and shows dated reasons', () => {
+  const current = { ...entry, id: 'urgent', time: new Date().toISOString(), systolic: 185, diastolic: 80, sleep: 8 };
+  render(React.createElement(Advisory, { entries: [current] }));
+  assert.ok(screen.getByRole('heading', { name: 'Measurement advisories & warnings' }));
+  assert.ok(screen.getByRole('heading', { name: 'Very high recorded blood pressure — urgent review' }));
+  assert.ok(screen.getByRole('heading', { name: 'Personal model: Learning your baseline' }));
+  assert.ok(screen.getByRole('link', { name: /AHA: very high blood pressure/ }));
+  assert.match(document.body.textContent, /Record urgent/);
+});
+
+test('summary evaluates newly saved readings immediately, opens panel and expires stale flags on focus', async t => {
+  const { WarningSummary, useMeasurementAdvisory } = await import('../src/components/MeasurementWarnings.jsx');
+  let clock = Date.parse('2026-11-14T12:00:00Z');
+  t.mock.method(Date, 'now', () => clock);
+  let opened = false;
+  function Harness({ entries }) {
+    const result = useMeasurementAdvisory(entries);
+    return React.createElement(WarningSummary, { result, onOpen: () => { opened = true; } });
+  }
+  const view = render(React.createElement(Harness, { entries: [] }));
+  clock += 1000;
+  const saved = { ...entry, time: new Date(clock).toISOString(), systolic: 185, diastolic: 80 };
+  view.rerender(React.createElement(Harness, { entries: [saved] }));
+  assert.ok(screen.getByRole('region', { name: 'Measurement warning summary' }));
+  fireEvent.click(screen.getByRole('button', { name: /Open advisories/ })); assert.equal(opened, true);
+  clock += 25 * 3600000;
+  fireEvent(window, new window.Event('focus'));
+  assert.equal(screen.queryByRole('region', { name: 'Measurement warning summary' }), null);
+});

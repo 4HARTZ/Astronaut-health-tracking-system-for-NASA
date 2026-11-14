@@ -60,6 +60,18 @@ class CameraStartupTests(unittest.TestCase):
         messages = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertTrue(any(m['type'] == 'error' for m in messages))
         self.assertFalse(any(m['type'] == 'telemetry' for m in messages))
+        self.assertIn('Could not open camera 0', messages[-1]['message'])
+
+        def fail_model(_):
+            raise RuntimeError('Model backend unavailable')
+        vision.FaceLandmarker.create_from_options = fail_model
+        output = io.StringIO()
+        with patch.dict(sys.modules, modules), patch.object(sys, 'argv', [str(SCRIPT)]), contextlib.redirect_stdout(output):
+            result = streamer.main()
+        self.assertEqual(result, 1)
+        messages = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertIn('Face model initialization failed: Model backend unavailable', messages[-1]['message'])
+        self.assertFalse(any(m['type'] == 'telemetry' for m in messages))
 
 if __name__ == '__main__':
     unittest.main()

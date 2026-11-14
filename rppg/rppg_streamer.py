@@ -71,7 +71,11 @@ def main():
     cap = None
     detector = None
 
-    if has_cv and not args.simulate and os.path.exists(model_path):
+    if not args.simulate and not os.path.isfile(model_path):
+        emit({"type": "error", "state": "error", "message": f"Face model file is missing: {model_path}. Reinstall the updated Orbit app."})
+        return 1
+
+    if has_cv and not args.simulate:
         try:
             base_options = python.BaseOptions(model_asset_path=model_path)
             options = vision.FaceLandmarkerOptions(
@@ -80,28 +84,24 @@ def main():
                 num_faces=1
             )
             detector = vision.FaceLandmarker.create_from_options(options)
+        except Exception as e:
+            emit({"type": "error", "state": "error", "message": f"Face model initialization failed: {e}. Camera was not opened."})
+            return 1
 
-            cam_id = int(args.camera) if args.camera.isdigit() else args.camera
+        cam_id = int(args.camera) if args.camera.isdigit() else args.camera
+        try:
             cap = cv2.VideoCapture(cam_id)
             if not cap.isOpened():
-                emit({
-                    "type": "warning",
-                    "message": f"Could not open camera {cam_id}. Check camera permissions and whether another app is using it."
-                })
                 cap.release()
-                cap = None
+                detector.close()
+                emit({"type": "error", "state": "error", "message": f"Could not open camera {cam_id}. Enable camera access for Orbit (or its Python process) in System Settings > Privacy & Security > Camera, close other camera apps, then quit and reopen Orbit. No measurements were generated."})
+                return 1
         except Exception as e:
-            emit({
-                "type": "warning",
-                "message": f"Camera initialization failed: {e}."
-            })
-            cap = None
-
-    if not args.simulate and (cap is None or not cap.isOpened()):
-        if detector is not None:
+            if cap is not None:
+                cap.release()
             detector.close()
-        emit({"type": "error", "state": "error", "message": "Camera unavailable or model missing. Check camera permission, dependencies, and face_landmarker.task. No measurements were generated."})
-        return 1
+            emit({"type": "error", "state": "error", "message": f"Could not initialize camera {cam_id}: {e}. Check camera access in macOS settings."})
+            return 1
 
     emit({
         "type": "status", "state": "active", "simulated": args.simulate,

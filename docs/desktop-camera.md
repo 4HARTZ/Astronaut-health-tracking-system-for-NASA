@@ -22,7 +22,7 @@ Prepare dependencies before going offline. No model download occurs at runtime: 
 
 ## Interpreter selection
 
-The launcher first uses `ORBIT_PYTHON`, if set, as an executable path (not a shell command with arguments). In development it next checks `.venv-rppg`; otherwise it uses `python3` on macOS/Linux or `py -3` on Windows. A packaged app requires an installed interpreter and libraries; these are not bundled.
+The launcher first uses `ORBIT_PYTHON`, if set, as a full executable path (not a shell command with arguments), then checks the previously saved camera interpreter. In development it next checks `.venv-rppg`; otherwise it uses `python3` on macOS/Linux or `py -3` on Windows. A packaged app requires an installed interpreter and libraries; these are not bundled.
 
 For an explicit interpreter on macOS/Linux:
 
@@ -36,7 +36,7 @@ For a packaged Mac app launched from a terminal, use the full executable path, a
 ORBIT_PYTHON="/absolute/path/to/.venv-rppg/bin/python" "/Applications/Orbit - Crew Health.app/Contents/MacOS/orbit-crew-health"
 ```
 
-An environment variable set in a terminal is not automatically inherited by an app opened from Finder. Provision the runtime environment for the intended launch method before deployment.
+An environment variable set in a terminal is not automatically inherited by an app opened from Finder. Orbit now remembers the absolute interpreter path in `camera-python.json` in its per-user application configuration directory after a successful camera startup. Launch the updated app once with the command above and connect the camera, then quit it. Subsequent Finder launches reuse that path. Python and the virtual environment must remain at that location. If moved or deleted, launch with a new `ORBIT_PYTHON` path and reconnect to update the setting. An explicit override also replaces an invalid saved configuration after a successful connection. No health records are stored in this configuration file.
 
 The native launcher resolves the script and model from application resources in packaged builds. Development can fall back to the repository location without depending on the current directory. It launches arguments directly, without a shell.
 

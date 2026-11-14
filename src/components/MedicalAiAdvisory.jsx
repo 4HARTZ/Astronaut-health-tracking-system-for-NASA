@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { latestReview, illustrativeCurve } from '../advisory.js';
 import { formatDate } from '../health.js';
+import MeasurementWarnings, { useMeasurementAdvisory } from './MeasurementWarnings.jsx';
 
 function Demonstration({ entry }) {
   const [sleep, setSleep] = useState(Number.isFinite(entry?.sleep) ? entry.sleep : 8);
@@ -23,13 +24,16 @@ function Demonstration({ entry }) {
   </section>;
 }
 
-export default function MedicalAiAdvisory({ entries = [] }) {
+export default function MedicalAiAdvisory({ entries = [], assessment }) {
+  const localAssessment = useMeasurementAdvisory(entries);
+  const result = assessment ?? localAssessment;
   const { entry, readings } = latestReview(entries);
   return <section className="space-y-6" aria-labelledby="data-review-heading">
     <div className="panel">
-      <h2 id="data-review-heading">Data review &amp; simulation</h2>
-      <p>Review saved measurements and explore a local demonstration. Awaiting medical review. Clinical alerts and treatment recommendations are disabled; missing readings do not establish normal health.</p>
+      <h2 id="data-review-heading">Advisory &amp; warnings</h2>
+      <p>Offline advisory prototype: personal pattern detection and explainable measurement flags. Review reasons and evidence before acting; no diagnosis or treatment is generated.</p>
     </div>
+    <MeasurementWarnings result={result} />
     <section className="panel" aria-labelledby="latest-review-heading">
       <h3 id="latest-review-heading">Latest saved check-in</h3>
       {entry ? <>

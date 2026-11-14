@@ -22,7 +22,7 @@ Open http://localhost:8080. Stop the server with Ctrl+C. Vite uses strict port 8
 | Cognitive activities | Signal Watch and Position Match, saved separately | Not available in the SQLite workspace yet |
 | Breathing guide | Available, no results stored | Available, no results stored |
 | Real-time monitor | Clearly labelled synthetic demonstration | Demo plus experimental camera pulse estimator |
-| Data review and simulator | Saved values plus an illustrative curve | Same |
+| Advisory and warnings | Local personal-baseline model, reference flags, saved values, example curve | Same |
 | Login, cloud sync, encryption, Bluetooth/serial devices | Not implemented | Not implemented |
 
 The desktop app has a local Rust backend, not a remote server. Browser and desktop databases are separate: there is no automatic browser-to-SQLite migration or synchronization. Export/import measurement JSON to move records. The native repository has different import/conflict and revision behavior from the browser repository; do not assume the browser's stale-edit protection exists in native storage. Cognitive backups cannot be imported into SQLite.
@@ -38,7 +38,7 @@ npm run tauri -- build
 
 Development opens a native window and starts Vite automatically; stop an existing port-8080 server first. The installed production app uses bundled files and needs no Vite server. Build on the target platform: macOS produces `.app` and `.dmg`; Windows produces an NSIS installer. Outputs are under `src-tauri/target/release/bundle/`. Signing and notarization for distribution are not configured by this prototype.
 
-Camera support is optional and needs a separate Python environment, even in a packaged app. The script and face model are bundled; Python and its libraries are not. See [desktop camera setup](docs/desktop-camera.md). Missing dependencies or denied camera permission produce an error, never synthetic measurements disguised as camera output.
+Camera support is optional and needs a separate Python environment, even in a packaged app. The script and face model are bundled; Python and its libraries are not. After one successful connection using an absolute `ORBIT_PYTHON` path, Orbit remembers that interpreter for future launches from Finder. See [desktop camera setup](docs/desktop-camera.md). Missing dependencies or denied camera permission produce an error, never synthetic measurements disguised as camera output.
 
 ## Existing records and backups (browser)
 
@@ -72,7 +72,7 @@ Record resting heart rate, paired blood pressure, temperature, sleep duration an
 
 Charts filter by inclusive local dates and measurement context and show up to 100 recent available values per indicator, with dated text equivalents. What changed compares the most recent comparable pair per indicator in the same context. These observations do not infer causes or health status.
 
-This is a prototype, not a medical device. Entry limits are not clinical thresholds. There are no diagnoses, treatment recommendations, health scores, medical alerts, or baseline assessments. Future medical rules require qualified mission medical review. Basic readings cannot assess bone density, radiation dose, or immune function.
+This is a prototype, not a medical device. Entry limits are not clinical thresholds. There are no diagnoses, treatment recommendations, validated health scores, or approved clinical alerts. The advisory prototype fits a statistical baseline and generates unvalidated measurement review flags. Future medical rules require qualified mission medical review. Basic readings cannot assess bone density, radiation dose, or immune function.
 
 Browser records and the local change journal remain unencrypted in IndexedDB; desktop check-ins are stored unencrypted in SQLite. The original localStorage array is retained as a migration backup. Use synthetic data in development. There is no authentication, remote backend, cloud synchronization, or production security. The desktop version has a local Rust backend. Clearing browser data removes records. The app uses no external runtime assets, and production builds support installation and offline app-shell caching.
 
@@ -156,11 +156,15 @@ Circle movement and counting can be turned off. Reduced-motion preferences disab
 Previous cognitive-session storage is retained to preserve earlier results. Health data and reports remain separate and unchanged.
 
 
-## Data review and simulation
+## Advisory, warnings, and simulation
 
-The Data Review tab reads the latest dated saved check-in using the shared schema (`heartRate`, `quality`, etc.). Missing measurements display as not recorded; zero remains zero. Synthetic monitor readings never feed this view. Editing or adding a saved check-in resets the example controls to the latest saved sleep and quality, with labelled defaults when missing.
+The Advisory & Warnings tab combines a local statistical anomaly model with explicit reference rules. All processing runs offline on saved check-ins in either IndexedDB or SQLite. A workspace-wide summary opens the panel when flags are present. Each flag shows its measured value, timestamp/context, rule or model evidence, and next review step. No health data is uploaded, and there is no external model service.
 
-The curve is a deliberately arbitrary demonstration in arbitrary units, not SAFTE, trained AI, clinical decision support, or a validated fatigue forecast. Clinical thresholds, medication checklists, NASA compliance claims, and EVA go/no-go output were removed from the previous advisory prototype. No automated diagnostic or operational-clearance IPC endpoint is exposed. The separate educational observations panel still carries its review status.
+The model fits a per-indicator median and robust spread from eight or more distinct prior dates in the same context within 30 days. Before that it shows Learning. The evaluated date is excluded from fitting; duplicate days do not add weight. It is an adaptive statistical model, not a neural network, clinical predictor or validated personal health baseline. Keep one crew member's records per workspace; editing the profile does not partition records.
+
+Only the latest saved check-in within 24 hours is evaluated for current flags. Missing, invalid, future and synthetic values are excluded; absent flags do not establish safety. Unvalidated camera estimates never feed the warnings. Sources provide general adult Earth-based references, not approved spaceflight protocols. The 24-hour freshness window, baseline settings, informal rating prompts, and adaptation rules are product choices awaiting medical review. See [advisory model and rule specification](docs/measurement-advisory.md).
+
+The separate illustrative sleep curve remains a demonstration in arbitrary units, not SAFTE, AI inference, or a validated fatigue forecast. Changing its controls never changes records or warnings. Medication instructions, NASA compliance claims and EVA go/no-go output remain disabled. The older educational observations panel is separate from these measurement flags.
 
 ## Cognitive activities and breathing
 

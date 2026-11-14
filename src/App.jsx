@@ -15,6 +15,7 @@ import RecordHistory from './components/RecordHistory.jsx';
 import RealtimeMonitor from './components/RealtimeMonitor.jsx';
 import CognitiveGames from './components/CognitiveGames.jsx';
 import MedicalAiAdvisory from './components/MedicalAiAdvisory.jsx';
+import { useMeasurementAdvisory, WarningSummary } from './components/MeasurementWarnings.jsx';
 import RechartsAnalytics from './components/RechartsAnalytics.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import BreathingGuide from './components/BreathingGuide.jsx';
@@ -27,6 +28,7 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
   const [activeTab, setActiveTab] = useState(isTestEnv ? 'all' : 'vitals');
   const [saved, setSaved] = useState(null);
   const [entries, setEntries] = useState([]);
+  const measurementAssessment = useMeasurementAdvisory(entries);
   const [editing, setEditing] = useState(null);
   const [formVersion, setFormVersion] = useState(0);
   const [message, setMessage] = useState('');
@@ -309,7 +311,7 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
                   className="!py-2 !px-3 !text-xs !bg-[#212c3d] !border-[#3d4f68] !text-[#c6d4df] hover:!text-white rounded-[3px] flex items-center gap-1.5"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-[#e58e26]" />
-                  <span>Data Review &amp; Simulation</span>
+                  <span>Advisory &amp; Warnings</span>
                 </button>
               </div>
             </div>
@@ -379,6 +381,8 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
             )}
           </div>
         </section>
+
+        {!loading && !storageError && <WarningSummary result={measurementAssessment} onOpen={() => setActiveTab('advisory')} />}
 
         {/* FEATURE 1: Daily Routine & Baseline Metric Cards */}
         {showVitals && (
@@ -475,7 +479,7 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
         {/* FEATURE 6: Recorded Data Review & Illustrative Simulation */}
         {showAdvisory && (
           <div id="advisory-section" className="space-y-6">
-            <MedicalAiAdvisory entries={entries} />
+            <MedicalAiAdvisory entries={entries} assessment={measurementAssessment} />
           </div>
         )}
 
