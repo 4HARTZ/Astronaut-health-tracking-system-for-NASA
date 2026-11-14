@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 export default function PwaStatus({ enabled = Boolean(import.meta.env?.PROD) }) {
- const [online,setOnline]=useState(()=>navigator.onLine);
+  const isTauri = typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__);
+  if (isTauri) return null;
+
+  const [online,setOnline]=useState(()=>navigator.onLine);
  const [status,setStatus]=useState(enabled?'Preparing offline access…':'Offline installation is available in the production build.');
  const [ready,setReady]=useState(false),[waiting,setWaiting]=useState(null);
  const [install,setInstall]=useState(null),[installed,setInstalled]=useState(()=>window.matchMedia?.('(display-mode: standalone)').matches??false);

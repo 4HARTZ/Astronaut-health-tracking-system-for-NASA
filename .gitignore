@@ -2,6 +2,12 @@ node_modules/
 dist/
 *.local
 
+# Tauri / Rust build artifacts
+src-tauri/target/
+src-tauri/gen-icons.cjs
+orbit_runtime_log.txt
+*.log
+
 # Local presentation artifacts and generation files
 /.pitch-build/
 /presentations/
