@@ -1,460 +1,105 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Brain, 
-  Play, 
-  RotateCcw, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Zap, 
-  Trophy, 
-  Activity,
-  Clock,
-  Gauge
-} from 'lucide-react';
-import { useHealthStore } from '../store/useHealthStore.js';
+import React,{useEffect,useRef,useState} from 'react';
+import {TASK_VERSION,TASK_NAMES,LIMITS,positionSequence,summarize,deviceContext} from '../cognitive.js';
 
-export default function CognitiveGames() {
-  const [activeGame, setActiveGame] = useState('pvt'); // 'pvt' | 'stroop'
-  const [sessionMode, setSessionMode] = useState('quick'); // 'quick' (5 trials) | 'standard' (15 trials) | 'practice'
-
-  // PVT State
-  const [pvtState, setPvtState] = useState('idle'); // 'idle' | 'waiting' | 'active' | 'result' | 'early' | 'completed'
-  const [reactionTime, setReactionTime] = useState(null);
-  const [history, setHistory] = useState([248, 262, 239, 255]);
-  const [trialCount, setTrialCount] = useState(0);
-  const [lapses, setLapses] = useState(0); // RT > 500ms
-  const [falseStarts, setFalseStarts] = useState(0);
-  const [displayMs, setDisplayMs] = useState(0);
-
-  const timerRef = useRef(null);
-  const startTimeRef = useRef(0);
-  const animFrameRef = useRef(null);
-
-  const maxTrials = sessionMode === 'quick' ? 5 : sessionMode === 'standard' ? 15 : 999;
-  const recordPvtTrial = useHealthStore((s) => s.recordPvtTrial);
-
-  const raf = typeof window !== 'undefined' && window.requestAnimationFrame 
-    ? window.requestAnimationFrame.bind(window) 
-    : (typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame : (cb) => setTimeout(cb, 16));
-  const caf = typeof window !== 'undefined' && window.cancelAnimationFrame 
-    ? window.cancelAnimationFrame.bind(window) 
-    : (typeof cancelAnimationFrame !== 'undefined' ? cancelAnimationFrame : (id) => clearTimeout(id));
-
-  // Start a new PVT trial
-  const startPvtTrial = () => {
-    if (trialCount >= maxTrials && sessionMode !== 'practice') {
-      setPvtState('completed');
-      return;
-    }
-
-    setPvtState('waiting');
-    setReactionTime(null);
-    setDisplayMs(0);
-
-    // Random inter-stimulus interval between 2000ms and 5000ms
-    const delay = Math.floor(Math.random() * 3000) + 2000;
-    timerRef.current = setTimeout(() => {
-      startTimeRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now();
-      setPvtState('active');
-
-      const updateCounter = () => {
-        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        const elapsed = Math.floor(now - startTimeRef.current);
-        setDisplayMs(elapsed);
-        animFrameRef.current = raf(updateCounter);
-      };
-      animFrameRef.current = raf(updateCounter);
-    }, delay);
-  };
-
-  const handlePvtClick = () => {
-    if (pvtState === 'waiting') {
-      // False start / Anticipatory response
-      clearTimeout(timerRef.current);
-      setFalseStarts(prev => prev + 1);
-      setPvtState('early');
-    } else if (pvtState === 'active') {
-      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-      const rt = Math.round(now - startTimeRef.current);
-      caf(animFrameRef.current);
-      setReactionTime(rt);
-      setDisplayMs(rt);
-
-      const nextCount = trialCount + 1;
-      setTrialCount(nextCount);
-      setHistory(prev => [rt, ...prev.slice(0, 19)]);
-      recordPvtTrial(rt);
-
-      if (rt > 500) {
-        setLapses(prev => prev + 1);
-      }
-
-      if (nextCount >= maxTrials && sessionMode !== 'practice') {
-        setPvtState('completed');
-      } else {
-        setPvtState('result');
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handleKeyDown = (e) => {
-      if (e.code === 'Space' && (pvtState === 'waiting' || pvtState === 'active')) {
-        e.preventDefault();
-        handlePvtClick();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      clearTimeout(timerRef.current);
-      caf(animFrameRef.current);
-    };
-  }, [pvtState]);
-
-  const resetSession = () => {
-    clearTimeout(timerRef.current);
-    caf(animFrameRef.current);
-    setPvtState('idle');
-    setTrialCount(0);
-    setLapses(0);
-    setFalseStarts(0);
-    setReactionTime(null);
-  };
-
-  // Performance calculations
-  const meanRt = history.length ? Math.round(history.reduce((a, b) => a + b, 0) / history.length) : 0;
-  const fastestRt = history.length ? Math.min(...history) : 0;
-  const sortedRt = [...history].sort((a, b) => a - b);
-  const fastest10Percent = sortedRt.length >= 3 ? sortedRt[0] : fastestRt;
-  const slowest10Percent = sortedRt.length >= 3 ? sortedRt[sortedRt.length - 1] : Math.max(...history);
-
-  // Astronaut Readiness Score calculation
-  let readinessScore = 100;
-  if (meanRt > 250) readinessScore -= Math.min(30, (meanRt - 250) * 0.3);
-  readinessScore -= lapses * 12;
-  readinessScore -= falseStarts * 5;
-  readinessScore = Math.max(20, Math.min(100, Math.round(readinessScore)));
-
-  const getDutyGrade = (score) => {
-    if (score >= 90) return { grade: 'GRADE A', label: 'OPTIMAL · GO FOR EVA / CRITICAL FLIGHT OPS', color: 'text-emerald-400' };
-    if (score >= 75) return { grade: 'GRADE B', label: 'NOMINAL · STANDARD MISSION READINESS', color: 'text-cyan-400' };
-    if (score >= 60) return { grade: 'GRADE C', label: 'MILD FATIGUE · MONITORED TASKS ONLY', color: 'text-amber-400' };
-    return { grade: 'GRADE D', label: 'FATIGUE CAUTION · CREW REST MANDATED', color: 'text-rose-400' };
-  };
-
-  const duty = getDutyGrade(readinessScore);
-
-  // Stroop Test State
-  const colors = [
-    { name: 'RED', css: 'text-red-500', hex: '#ef4444' },
-    { name: 'GREEN', css: 'text-emerald-500', hex: '#10b981' },
-    { name: 'BLUE', css: 'text-sky-500', hex: '#0ea5e9' },
-    { name: 'YELLOW', css: 'text-amber-400', hex: '#facc15' },
-  ];
-  const [stroopWord, setStroopWord] = useState(colors[0]);
-  const [stroopInk, setStroopInk] = useState(colors[1]);
-  const [stroopScore, setStroopScore] = useState(0);
-  const [stroopTrials, setStroopTrials] = useState(0);
-
-  const nextStroop = () => {
-    const w = colors[Math.floor(Math.random() * colors.length)];
-    const i = colors[Math.floor(Math.random() * colors.length)];
-    setStroopWord(w);
-    setStroopInk(i);
-  };
-
-  const handleStroopChoice = (chosenColor) => {
-    setStroopTrials(prev => prev + 1);
-    if (chosenColor.name === stroopInk.name) {
-      setStroopScore(prev => prev + 1);
-    }
-    nextStroop();
-  };
-
-  return (
-    <section className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6 rounded-[4px] bg-[#16202d] border border-[#2a475e]">
-        <div>
-          <span className="text-[11px] font-mono uppercase tracking-wider text-[#66c0f4] font-bold flex items-center gap-2">
-            <Brain className="w-4 h-4 text-[#66c0f4]" />
-            NASA NEUROBEHAVIORAL READINESS SUITE (PVT &amp; EXECUTIVE ATTENTION)
-          </span>
-          <h2 className="text-xl font-bold text-white mt-1">Cognitive Fitness &amp; Mental Health</h2>
-        </div>
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => setActiveGame('pvt')}
-            className={`px-4 py-2 rounded-[3px] text-xs font-semibold transition ${
-              activeGame === 'pvt' ? '!bg-[#1a9fff] !text-white font-bold' : '!bg-[#212c3d] !text-[#c6d4df] !border-[#3d4f68] hover:!text-white'
-            }`}
-          >
-            PVT Vigilance Task
-          </button>
-          <button
-            type="button"
-            onClick={() => { setActiveGame('stroop'); nextStroop(); }}
-            className={`px-4 py-2 rounded-[3px] text-xs font-semibold transition ${
-              activeGame === 'stroop' ? '!bg-[#1a9fff] !text-white font-bold' : '!bg-[#212c3d] !text-[#c6d4df] !border-[#3d4f68] hover:!text-white'
-            }`}
-          >
-            Stroop Conflict Test
-          </button>
-        </div>
-      </div>
-
-      {activeGame === 'pvt' ? (
-        /* PVT Game Container */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2 p-6 sm:p-8 rounded-[4px] bg-[#1b2838] border border-[#2a475e] flex flex-col items-center justify-center min-h-[380px] text-center relative overflow-hidden shadow-sm">
-            <div className="absolute top-4 left-4 right-4 flex justify-between items-center text-xs font-mono text-[#8f98a0]">
-              <span>
-                PROTOCOL: {sessionMode === 'quick' ? '1-MIN QUICK CHECK' : sessionMode === 'standard' ? 'NASA 3-MIN FLIGHT PROTOCOL' : 'PRACTICE'}
-              </span>
-              <span>
-                TRIAL: <strong className="text-white">{trialCount}</strong> / {maxTrials === 999 ? '∞' : maxTrials}
-              </span>
-            </div>
-
-            {pvtState === 'idle' && (
-              <div className="space-y-5 max-w-lg mx-auto pt-4">
-                <div className="w-14 h-14 rounded-full bg-[#1a9fff]/10 border border-[#1a9fff]/30 flex items-center justify-center mx-auto text-[#66c0f4]">
-                  <Zap className="w-7 h-7" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white m-0">Psychomotor Vigilance Task (PVT)</h3>
-                  <p className="text-xs text-[#8f98a0] mt-1.5 leading-relaxed">
-                    Evaluates central nervous system speed, cognitive throughput, and micro-sleep vulnerability under circadian disruption. Press <kbd className="px-2 py-0.5 rounded bg-[#101822] border border-[#2a475e] text-[#66c0f4]">SPACEBAR</kbd> or click as fast as possible when the red millisecond counter appears.
-                  </p>
-                </div>
-
-                <div className="flex justify-center gap-2.5 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => { setSessionMode('quick'); }}
-                    className={`px-3.5 py-1.5 text-xs font-semibold rounded-[3px] ${
-                      sessionMode === 'quick' ? '!bg-[#212c3d] !text-[#66c0f4] !border-[#1a9fff]' : '!bg-[#101822] !text-[#8f98a0] !border-[#2a475e]'
-                    }`}
-                  >
-                    1-Min Check (5 Trials)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setSessionMode('standard'); }}
-                    className={`px-3.5 py-1.5 text-xs font-semibold rounded-[3px] ${
-                      sessionMode === 'standard' ? '!bg-[#212c3d] !text-[#66c0f4] !border-[#1a9fff]' : '!bg-[#101822] !text-[#8f98a0] !border-[#2a475e]'
-                    }`}
-                  >
-                    NASA Standard (15 Trials)
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={startPvtTrial}
-                  className="button !py-2.5 !px-6 !text-xs !font-bold"
-                >
-                  Start Assessment Protocol ↗
-                </button>
-              </div>
-            )}
-
-            {pvtState === 'waiting' && (
-              <div
-                onClick={handlePvtClick}
-                className="w-full h-full min-h-[220px] flex flex-col items-center justify-center cursor-pointer select-none"
-              >
-                <div className="w-4 h-4 rounded-full bg-[#8f98a0] animate-ping mb-3"></div>
-                <p className="text-sm font-mono text-[#8f98a0] tracking-wider m-0">WAIT FOR STIMULUS…</p>
-                <span className="text-[11px] text-[#626d78] mt-1">Focus on center · Do not anticipate</span>
-              </div>
-            )}
-
-            {pvtState === 'active' && (
-              <div
-                onClick={handlePvtClick}
-                className="w-full h-full min-h-[220px] flex flex-col items-center justify-center cursor-pointer select-none bg-[#d9534f]/10"
-              >
-                <div className="text-5xl sm:text-6xl font-black font-mono text-[#d9534f] tracking-tight animate-pulse">
-                  {displayMs} <span className="text-xl font-normal">ms</span>
-                </div>
-                <p className="text-xs font-mono text-[#d9534f] mt-3 font-bold uppercase tracking-widest m-0">
-                  PRESS SPACEBAR / CLICK NOW!
-                </p>
-              </div>
-            )}
-
-            {pvtState === 'result' && (
-              <div className="space-y-3">
-                <div className="text-4xl sm:text-5xl font-black font-mono text-[#66c0f4]">
-                  {reactionTime} <span className="text-xl text-[#8f98a0]">ms</span>
-                </div>
-                <div className="text-xs font-mono">
-                  {reactionTime < 240 ? (
-                    <span className="text-[#a4d007] font-semibold flex items-center justify-center gap-1">
-                      <CheckCircle2 className="w-4 h-4" /> Optimal Neurobehavioral Speed (&lt;240 ms)
-                    </span>
-                  ) : reactionTime < 350 ? (
-                    <span className="text-[#66c0f4] font-semibold">Nominal Flight Response (240–350 ms)</span>
-                  ) : reactionTime <= 500 ? (
-                    <span className="text-[#e58e26] font-semibold flex items-center justify-center gap-1">
-                      <AlertTriangle className="w-4 h-4" /> Slower Reaction / Mild CNS Fatigue
-                    </span>
-                  ) : (
-                    <span className="text-[#d9534f] font-semibold flex items-center justify-center gap-1">
-                      <AlertTriangle className="w-4 h-4" /> Attention Lapse Registered (&gt;500 ms)
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={startPvtTrial}
-                  className="px-4 py-1.5 rounded-[3px] bg-[#212c3d] text-[#c6d4df] hover:text-white border border-[#3d4f68] text-xs font-semibold"
-                >
-                  Continue to Next Trial ({trialCount + 1}/{maxTrials}) ↗
-                </button>
-              </div>
-            )}
-
-            {pvtState === 'early' && (
-              <div className="space-y-3">
-                <div className="text-[#e58e26] text-sm font-bold flex items-center justify-center gap-2">
-                  <AlertTriangle className="w-4 h-4" /> False Start (Anticipation Error)
-                </div>
-                <p className="text-xs text-[#8f98a0] m-0">Response triggered before the millisecond counter appeared.</p>
-                <button
-                  type="button"
-                  onClick={startPvtTrial}
-                  className="px-4 py-1.5 rounded-[3px] bg-[#212c3d] text-[#c6d4df] hover:text-white border border-[#3d4f68] text-xs font-semibold"
-                >
-                  Repeat Trial
-                </button>
-              </div>
-            )}
-
-            {pvtState === 'completed' && (
-              <div className="space-y-3 max-w-md mx-auto">
-                <div className="w-10 h-10 rounded-full bg-[#5c7e10]/20 border border-[#a4d007]/40 flex items-center justify-center mx-auto text-[#a4d007]">
-                  <Trophy className="w-5 h-5" />
-                </div>
-                <h3 className="text-base font-bold text-white m-0">Assessment Session Completed</h3>
-                <div className="p-2.5 rounded-[3px] bg-[#16202d] border border-[#2a475e] text-xs font-mono">
-                  <div className={`text-sm font-black ${duty.color}`}>{duty.grade}</div>
-                  <div className="text-[#c6d4df] mt-0.5">{duty.label}</div>
-                  <div className="text-[#8f98a0] text-[11px] mt-0.5">Readiness Index: {readinessScore}%</div>
-                </div>
-                <div className="flex justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={resetSession}
-                    className="px-3.5 py-1.5 rounded-[3px] bg-[#212c3d] text-[#c6d4df] hover:text-white border border-[#3d4f68] text-xs font-semibold"
-                  >
-                    New Assessment
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* PVT Telemetry & NASA Standards */}
-          <div className="p-5 sm:p-6 rounded-[4px] bg-[#1b2838] border border-[#2a475e] space-y-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono m-0 flex items-center gap-2">
-                <Gauge className="w-4 h-4 text-[#66c0f4]" />
-                Readiness Analytics
-              </h3>
-              <span className={`text-xs font-mono font-bold ${duty.color}`}>{duty.grade}</span>
-            </div>
-
-            <div className="p-4 rounded-[3px] bg-[#16202d] border border-[#2a475e] text-center">
-              <div className="text-[11px] font-mono uppercase text-[#8f98a0]">Readiness Score</div>
-              <div className="text-4xl font-black font-mono text-[#66c0f4] my-1">{readinessScore}%</div>
-              <div className="text-xs text-[#8f98a0] font-mono">{duty.label}</div>
-            </div>
-
-            <div className="space-y-2.5">
-              <div className="p-2.5 rounded-[3px] bg-[#16202d] border border-[#2a475e] flex justify-between items-center text-xs">
-                <span className="text-[#8f98a0]">Mean Reaction Time</span>
-                <span className="font-bold font-mono text-[#66c0f4]">{meanRt} ms</span>
-              </div>
-
-              <div className="p-2.5 rounded-[3px] bg-[#16202d] border border-[#2a475e] flex justify-between items-center text-xs">
-                <span className="text-[#8f98a0]">Fastest 10% (Optimum)</span>
-                <span className="font-bold font-mono text-[#a4d007]">{fastest10Percent} ms</span>
-              </div>
-
-              <div className="p-2.5 rounded-[3px] bg-[#16202d] border border-[#2a475e] flex justify-between items-center text-xs">
-                <span className="text-[#8f98a0]">Attention Lapses (&gt;500ms)</span>
-                <span className={`font-bold font-mono ${lapses === 0 ? 'text-[#a4d007]' : 'text-[#d9534f]'}`}>
-                  {lapses}
-                </span>
-              </div>
-
-              <div className="p-2.5 rounded-[3px] bg-[#16202d] border border-[#2a475e] flex justify-between items-center text-xs">
-                <span className="text-[#8f98a0]">False Starts (Anticipations)</span>
-                <span className={`font-bold font-mono ${falseStarts === 0 ? 'text-[#a4d007]' : 'text-[#e58e26]'}`}>
-                  {falseStarts}
-                </span>
-              </div>
-            </div>
-
-            {/* Recent Trial Bubbles */}
-            <div className="pt-1.5">
-              <div className="text-[11px] font-mono text-[#8f98a0] uppercase mb-2">Recent Trial History</div>
-              <div className="flex gap-1.5 flex-wrap">
-                {history.slice(0, 10).map((rt, idx) => (
-                  <span
-                    key={idx}
-                    className={`px-2 py-0.5 rounded-[2px] text-[11px] font-mono border ${
-                      rt < 250
-                        ? 'bg-[#5c7e10]/20 text-[#a4d007] border-[#a4d007]/30'
-                        : rt < 350
-                        ? 'bg-[#16202d] text-[#c6d4df] border-[#2a475e]'
-                        : 'bg-[#d9534f]/20 text-[#d9534f] border-[#d9534f]/30'
-                    }`}
-                  >
-                    {rt}ms
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Stroop Test Container */
-        <div className="p-8 sm:p-10 rounded-[4px] bg-[#1b2838] border border-[#2a475e] max-w-xl mx-auto text-center space-y-6 shadow-sm">
-          <div>
-            <span className="text-xs font-mono text-[#8f98a0] uppercase">Executive Attention &amp; Conflict Processing</span>
-            <h3 className="text-lg font-bold text-white mt-1.5">Select the INK COLOR, ignore the word text</h3>
-          </div>
-
-          <div className="p-10 rounded-[3px] bg-[#16202d] border border-[#2a475e]">
-            <span className={`text-4xl sm:text-5xl font-black tracking-widest ${stroopInk.css}`}>
-              {stroopWord.name}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 max-w-xs mx-auto">
-            {colors.map((c) => (
-              <button
-                key={c.name}
-                type="button"
-                onClick={() => handleStroopChoice(c)}
-                className="py-3 px-4 rounded-[3px] bg-[#212c3d] border border-[#3d4f68] text-xs font-bold text-white hover:border-[#66c0f4] transition"
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
-
-          <div className="text-xs font-mono text-[#8f98a0]">
-            Score: <span className="text-[#66c0f4] font-bold">{stroopScore}</span> / {stroopTrials} correct
-          </div>
-        </div>
-      )}
-    </section>
-  );
+const ms=value=>value===null?'—':`${Math.round(value)} ms`;
+function Result({session}){
+ const s=summarize(session);
+ return <><p><strong>{TASK_NAMES[session.task]}</strong> · {session.practice?'Practice · ':''}{session.status==='running'?'incomplete (no saved ending)':session.status} · {new Date(session.startedAt).toLocaleString()} · {session.context.input} · v{session.taskVersion}</p>
+ {session.reason&&<p>{session.reason}</p>}
+ <p>{session.task==='signal'?`${s.answered}/${s.eligible} signals answered; ${s.missed} unanswered; ${s.early} early responses.`:`${s.correct}/${s.eligible} eligible trials correct; ${s.missed} unanswered; ${s.incorrectMatches} incorrect matches; ${s.incorrectDifferences} incorrect differences.`}</p>
+ <p>Median {session.task==='position'?'correct-response ':''}time: {ms(s.medianMs)}. Range: {ms(s.minMs)} to {ms(s.maxMs)}.</p></>;
+}
+export default function CognitiveGames({repository,onSaved=()=>{}}){
+ const [task,setTask]=useState('signal'),[input,setInput]=useState('keyboard'),[stage,setStage]=useState('choose'),[sessions,setSessions]=useState([]),[active,setActive]=useState(null),[visual,setVisual]=useState(null),[message,setMessage]=useState(''),[result,setResult]=useState(null),[practiced,setPracticed]=useState({}),[busy,setBusy]=useState(false);
+ const run=useRef(null),frame=useRef(null),writes=useRef(Promise.resolve()),mounted=useRef(true),startButton=useRef(null);
+ const [remaining,setRemaining]=useState(0);
+ const repositoryRef=useRef(repository);repositoryRef.current=repository;
+ const available=Boolean(repository?.cognitiveSessions);
+ function persist(session){
+  const copy=structuredClone(session);
+  writes.current=writes.current.catch(()=>{}).then(()=>repositoryRef.current.saveCognitiveSession(copy));
+  writes.current.catch(()=>{if(mounted.current){if(run.current?.session.id===copy.id)finish('Interrupted: local storage failed.');setMessage('Could not save locally. Keep this page open and retry saving the result.');}});
+  return writes.current;
+ }
+ async function refresh(){if(repositoryRef.current?.cognitiveSessions){const all=await repositoryRef.current.cognitiveSessions();if(mounted.current)setSessions(all);}}
+ useEffect(()=>{if(stage==='play')startButton.current?.focus();},[stage]);
+ useEffect(()=>{mounted.current=true;refresh().catch(()=>setMessage('Could not load cognitive history.'));
+  return ()=>{mounted.current=false;if(frame.current!==null)cancelAnimationFrame(frame.current);if(run.current){const s=run.current.session;run.current=null;s.status='interrupted';s.reason='Activity closed before completion.';s.endedAt=new Date().toISOString();persist(s).catch(()=>{});}};
+ },[repository]);
+ function finish(reason=''){
+  const r=run.current;if(!r)return;run.current=null;cancelAnimationFrame(frame.current);
+  const s=r.session;s.status=reason?'interrupted':'completed';s.reason=reason;s.endedAt=new Date().toISOString();
+  setActive(null);setVisual(null);setStage('result');setResult(structuredClone(s));
+  if(s.practice){if(!reason)setPracticed(p=>({...p,[`${s.task}:${s.context.input}`]:true}));setMessage('Practice is excluded from history and trends.');}
+  else {setMessage('Saving on this device…');persist(s).then(async()=>{if(mounted.current){setMessage('Saved on this device.');await refresh();onSaved();}}).catch(()=>{});}
+ }
+ useEffect(()=>{const hidden=()=>{if(document.hidden)finish('Interrupted: page was hidden.');},blur=()=>finish('Interrupted: window lost focus.');
+  document.addEventListener('visibilitychange',hidden);window.addEventListener('blur',blur);
+  return ()=>{document.removeEventListener('visibilitychange',hidden);window.removeEventListener('blur',blur);};
+ },[]);
+ function answer(response,kind){
+  const r=run.current;if(!r)return;if(r.session.context.input!==(kind==='keyboard'?'keyboard':'pointer')){setMessage(`This session uses ${r.session.context.input==='keyboard'?'keyboard controls (Space or M/D)':'touch, mouse or pen controls'}. Change controls before starting your next session.`);return;}
+  const now=performance.now();
+  if(r.session.task==='signal'&&!r.current){r.session.earlyResponses.push({atMs:now-r.start,input:kind});setMessage('Response before the signal. Wait for “Respond”.');return;}
+  const t=r.current;if(!t||!t.eligible||t.response!==null)return;
+  t.response=response;t.rtMs=now-r.start-t.onsetMs;t.input=kind;t.correct=r.session.task==='signal'||(response==='match')===(t.stimulus===r.session.sequence[t.index-2]);
+  if(r.session.practice)setMessage(t.correct?'Response recorded: correct.':'Response recorded: incorrect. Compare with TWO presentations earlier.');
+  if(r.session.task==='signal'){r.current=null;setVisual(null);r.next=now+1000+Math.random()*3000;}
+  if(!r.session.practice)persist(r.session).catch(()=>{});
+ }
+ useEffect(()=>{const key=event=>{if(!run.current||event.repeat)return;if(event.key==='Escape'){event.preventDefault();finish('Exited by user.');return;}
+  if(event.target instanceof HTMLElement&&event.target.closest('[data-game-exit]'))return;
+  const task=run.current.session.task;if(task==='signal'&&event.code==='Space'){event.preventDefault();answer('respond','keyboard');}
+  if(task==='position'&&['m','d'].includes(event.key.toLowerCase())){event.preventDefault();answer(event.key.toLowerCase()==='m'?'match':'different','keyboard');}};
+  window.addEventListener('keydown',key);return ()=>window.removeEventListener('keydown',key);
+ },[]);
+ async function start(practice){
+  setBusy(true);setMessage('');
+  const session={id:crypto.randomUUID(),task,taskVersion:TASK_VERSION,practice,status:'running',startedAt:new Date().toISOString(),endedAt:null,reason:'',context:deviceContext(input),sequence:task==='position'?positionSequence(practice?8:40):[],trials:[],earlyResponses:[]};
+  try{if(!practice)await persist(session);}catch{setBusy(false);return;}
+  if(!mounted.current)return;
+  if(document.hidden){session.status='interrupted';session.reason='Page hidden before activity began.';session.endedAt=new Date().toISOString();if(!practice)await persist(session).catch(()=>{});setBusy(false);refresh();return;}
+  const now=performance.now(),r={session,start:now,last:now,next:now+1500,current:null,index:0,duration:practice?20000:180000};
+  run.current=r;setActive(session);setStage('play');setVisual(null);setBusy(false);startButton.current?.focus();
+  setRemaining(session.task==='signal'?r.duration/1000:Math.ceil((1500+session.sequence.length*3000)/1000));
+  function tick(time){
+   if(run.current!==r)return;
+   setRemaining(Math.max(0,Math.ceil(((session.task==='signal'?r.duration:1500+session.sequence.length*3000)-(time-r.start))/1000)));
+   if(time-r.last>1000){finish('Interrupted: browser timing gap exceeded one second.');return;}r.last=time;
+   if(session.task==='signal'&&time-r.start>=r.duration){finish();return;}
+   if(session.task==='signal'&&r.current&&time-r.start-r.current.onsetMs>=3000){r.current=null;setVisual(null);r.next=time+1000+Math.random()*3000;}
+   if((time>=r.next&&!r.current&&time-r.start<=r.duration-3000) || session.task==='position'&&time>=r.next){
+    if(session.task==='position'&&r.index>=session.sequence.length){finish();return;}
+    const t={index:r.index,stimulus:session.task==='signal'?'signal':session.sequence[r.index],eligible:session.task==='signal'||r.index>=2,onsetMs:time-r.start,schedulingDelayMs:Math.max(0,time-r.next),response:null,rtMs:null,correct:false};
+    session.trials.push(t);r.current=t;r.index++;setVisual(t.stimulus);setMessage('');
+    r.next=session.task==='signal'?Infinity:time+3000;
+    if(!practice)persist(session).catch(()=>{});
+   }
+   // A neutral gap distinguishes consecutive presentations in the same grid cell.
+   if(session.task==='position'&&r.current&&time-r.start-r.current.onsetMs>=2000)setVisual(null);
+   frame.current=requestAnimationFrame(tick);
+  }
+  frame.current=requestAnimationFrame(tick);
+ }
+ function download(){const blob=new Blob([JSON.stringify({type:'orbit-cognitive-backup',schemaVersion:1,sessions},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='orbit-cognitive-sessions.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ const history=sessions.filter(s=>s.task===task&&!s.practice),comparable=history.filter(s=>s.status==='completed'&&s.taskVersion===TASK_VERSION&&s.context.input===input),latest=comparable.slice(0,2);
+ return <section className="panel cognitive-panel" aria-labelledby="cognitive-heading"><p className="eyebrow">OPTIONAL ACTIVITIES</p><h2 id="cognitive-heading">Cognitive activities</h2>
+ <span className="review-badge">Awaiting medical review</span><p>Original Orbit adaptations, not validated PVT or Cognition instruments. No clinical validation or NASA endorsement. Results cannot independently determine mental state, diagnose conditions or assess fitness for duty.</p>
+ <p className="hint">{LIMITS} Results stay separate from health measurements, observations and printed health reports. Storage is local and unencrypted.</p>
+ {!available&&<p>Activities are unavailable until device storage is ready.</p>}
+ {stage!=='play'&&<><div className="game-options"><label>Activity<select value={task} disabled={busy} onChange={e=>{setTask(e.target.value);setStage('choose');setResult(null);}}><option value="signal">Signal Watch · 3 minutes</option><option value="position">Position Match · about 2 minutes</option></select></label><label>Response controls<select value={input} disabled={busy} onChange={e=>setInput(e.target.value)}><option value="keyboard">Keyboard</option><option value="pointer">Touch / mouse / pen</option></select></label></div>
+ <p>{task==='signal'?'Wait for “Respond”, then respond once using Space or the large button. Delays vary. Responses before the signal are recorded. Signals expire after three seconds; that is a game rule, not a medical threshold.':'Watch the grid. Choose Match (M) if the position is the same as TWO presentations earlier; otherwise choose Different (D). The first two presentations are unscored. Each trial lasts three seconds, including a one-second neutral gap. Example: top-left, center, top-left → Match.'}</p>
+ <p className="hint">Practice has no saved score. Choose a comfortable input and repeat practice whenever needed. These visual timed activities may not suit every vision, motor or assistive-technology need; no equivalent nonvisual assessment is claimed. No moving animation or color-only cues.</p>
+ <div className="flow-actions"><button disabled={!available||busy} onClick={()=>start(true)}>Practice {TASK_NAMES[task]}</button><button disabled={!available||busy||!practiced[`${task}:${input}`]} onClick={()=>start(false)}>Start {TASK_NAMES[task]}</button></div><p className="hint">Complete practice with your selected controls to enable Start. Exit at any time; changing tabs or windows interrupts a session.</p></>}
+ {stage==='play'&&<div className="game-play"><h3>{active.practice?'Practice: ':''}{TASK_NAMES[active.task]}</h3><p>{remaining} seconds remaining</p><p>{active.context.input==='keyboard'?(active.task==='signal'?'Space to respond':'M = Match · D = Different'):'Use the response buttons below.'} · Escape to exit</p>
+ {active.task==='signal'?<><div className="signal-display">{visual?'Respond':'Wait for the signal'}</div><button ref={startButton} className="game-response" onPointerDown={e=>{e.preventDefault();answer('respond',e.pointerType||'pointer');}} onClick={e=>{if(e.detail===0)answer('respond','keyboard');}}>Respond{active.context.input==='keyboard'?' (Space)':''}</button></>:<><div className="position-grid" aria-label="Visual position task; three rows and three columns">{Array.from({length:9},(_,i)=><div key={i} className={visual===i?'position-active':''}>{visual===i?'●':''}</div>)}</div><p>{run.current?.index<=2?'Observe: first two presentations are unscored.': 'Compare with two presentations earlier.'}</p><div className="flow-actions"><button ref={startButton} className="game-response" onPointerDown={e=>{e.preventDefault();answer('match',e.pointerType||'pointer');}} onClick={e=>{if(e.detail===0)answer('match','keyboard');}}>Match (M)</button><button className="game-response" onPointerDown={e=>{e.preventDefault();answer('different',e.pointerType||'pointer');}} onClick={e=>{if(e.detail===0)answer('different','keyboard');}}>Different (D)</button></div></>}
+ <button data-game-exit="true" className="game-exit" onClick={()=>finish('Exited by user.')}>Exit activity</button></div>}
+ <p role="status">{message}</p>
+ {stage==='result'&&result&&<div className="game-result"><h3>Session results</h3><Result session={result}/>{!result.practice&&<button disabled={busy} onClick={async()=>{setBusy(true);try{await persist(result);setMessage('Saved on this device.');await refresh();onSaved();}catch{/* persist displays error */}finally{setBusy(false);}}}>Retry saving result</button>}</div>}
+ {stage!=='play'&&<details><summary>Local performance history and trends</summary><p>Comparisons use completed v{TASK_VERSION} sessions with the selected activity and input only. Practice and incomplete attempts are excluded. Device or browser changes can still affect comparisons. No population norms or clinical baseline are applied.</p>
+ {latest.length===2?<p>Latest comparable sessions: median correct-response time {ms(summarize(latest[1]).medianMs)} → {ms(summarize(latest[0]).medianMs)}; correct responses {summarize(latest[1]).correct}/{summarize(latest[1]).eligible} → {summarize(latest[0]).correct}/{summarize(latest[0]).eligible}. These differences do not establish improvement or decline in health.</p>:<p>Two completed sessions with these settings are needed for a descriptive comparison.</p>}
+ <button disabled={!sessions.length} onClick={download}>Export cognitive backup</button><label>Import cognitive backup<input type="file" accept="application/json,.json" disabled={!available||busy} onChange={async e=>{const file=e.target.files?.[0];e.target.value='';if(!file)return;setBusy(true);try{if(file.size>5*1024*1024)throw Error('Choose a backup smaller than 5 MB.');const count=await repository.importCognitiveBackup(JSON.parse(await file.text()));await refresh();onSaved();setMessage(`Imported ${count} cognitive sessions; existing sessions preserved.`);}catch(error){setMessage(`Import failed: ${error.message}`);}finally{setBusy(false);}}}/></label><p className="hint">Separate from measurement backups. Includes trial data and browser context. Running attempts from another tab or a closed page are unfinished, not completed; they are excluded from trends. Showing the latest 30 attempts for this activity; export includes all activities and attempts.</p>
+ <div className="game-history">{history.length?history.slice(0,30).map(s=><article key={s.id}><Result session={s}/></article>):<p>No saved sessions for this activity.</p>}</div></details>}
+ <details><summary>Sources and adaptation limits</summary><p><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3197786/">Brief PVT research</a> supports investigating short vigilance tasks, not validation of Orbit. <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC4691281/">Cognition research</a> includes a fractal 2-back; Orbit uses positions and two response choices. <a href="https://pubmed.ncbi.nlm.nih.gov/17470009/">N-back validity research</a> cautions against treating performance as general working-memory capacity. Original code, instructions and stimuli; no assessment assets copied.</p></details>
+ </section>;
 }

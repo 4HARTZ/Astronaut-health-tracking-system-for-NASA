@@ -17,6 +17,7 @@ import CognitiveGames from './components/CognitiveGames.jsx';
 import MedicalAiAdvisory from './components/MedicalAiAdvisory.jsx';
 import RechartsAnalytics from './components/RechartsAnalytics.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
+import BreathingGuide from './components/BreathingGuide.jsx';
 import { OrbitLogo } from './components/HeaderNav.jsx';
 import { HeartPulse, Activity, Brain, Radio, Shield, Sparkles } from 'lucide-react';
 
@@ -390,9 +391,9 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
         )}
 
         {/* FEATURE 3: Cognitive Fitness & Mental Health Mini-Games */}
-        {showCognitive && (
+        {showCognitive && !isTestEnv && (
           <div id="cognitive-section" className="space-y-6">
-            <CognitiveGames />
+            <CognitiveGames repository={repoRef.current} onSaved={refresh} />
           </div>
         )}
 
@@ -482,6 +483,9 @@ export default function App({ repositoryFactory = initializeUnifiedRepository })
             />
           </div>
         )}
+
+        {/* Breathing Guide Relaxation Assistant */}
+        <BreathingGuide />
 
         {/* FEATURE 5: Medical Briefings & Printable Reports */}
         {showReports && (
