@@ -166,7 +166,7 @@ while True:
                 2
             )
 
-    cv2.imshow("HONOR rPPG - RGB Extraction", frame)
+    cv2.imshow("SpaceView rPPG - RGB Extraction", frame)
 
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
