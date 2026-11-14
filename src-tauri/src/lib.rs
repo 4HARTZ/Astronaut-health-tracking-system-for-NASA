@@ -2,15 +2,22 @@ pub mod models;
 pub mod db;
 pub mod rppg;
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 use tauri::{AppHandle, Manager, State};
 use db::Database;
 use models::{CheckInRecord, ImportResult, StorageStats};
 use rppg::{RppgManager, RppgStatus};
 
 pub struct AppState {
-    pub db: Arc<Database>,
+    pub db_dir: PathBuf,
     pub rppg: Arc<RppgManager>,
+}
+
+fn account_database(state: &AppState, account_id: &str) -> Result<Database, String> {
+    if !matches!(account_id, "ryan" | "tharusha" | "hansaja" | "apurwa") {
+        return Err("Unknown crew account.".into());
+    }
+    Database::new(state.db_dir.join(format!("orbit_crew_{account_id}.db")))
 }
 
 #[tauri::command]
@@ -32,28 +39,28 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-fn db_get_entries(state: State<AppState>) -> Result<Vec<CheckInRecord>, String> {
-    state.db.get_entries()
+fn db_get_entries(state: State<AppState>, account_id: String) -> Result<Vec<CheckInRecord>, String> {
+    account_database(&state, &account_id)?.get_entries()
 }
 
 #[tauri::command]
-fn db_save_entry(state: State<AppState>, entry: CheckInRecord) -> Result<CheckInRecord, String> {
-    state.db.save_entry(&entry)
+fn db_save_entry(state: State<AppState>, account_id: String, entry: CheckInRecord) -> Result<CheckInRecord, String> {
+    account_database(&state, &account_id)?.save_entry(&entry)
 }
 
 #[tauri::command]
-fn db_delete_entry(state: State<AppState>, id: String) -> Result<bool, String> {
-    state.db.delete_entry(&id)
+fn db_delete_entry(state: State<AppState>, account_id: String, id: String) -> Result<bool, String> {
+    account_database(&state, &account_id)?.delete_entry(&id)
 }
 
 #[tauri::command]
-fn db_import_backup(state: State<AppState>, entries: Vec<CheckInRecord>) -> Result<ImportResult, String> {
-    state.db.import_backup(&entries)
+fn db_import_backup(state: State<AppState>, account_id: String, entries: Vec<CheckInRecord>) -> Result<ImportResult, String> {
+    account_database(&state, &account_id)?.import_backup(&entries)
 }
 
 #[tauri::command]
-fn db_get_stats(state: State<AppState>) -> Result<StorageStats, String> {
-    state.db.get_stats()
+fn db_get_stats(state: State<AppState>, account_id: String) -> Result<StorageStats, String> {
+    account_database(&state, &account_id)?.get_stats()
 }
 
 #[tauri::command]
@@ -89,17 +96,12 @@ pub fn run() {
             log_debug("Setup hook entered");
             let app_data_dir = app.path().app_local_data_dir()
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
-            let db_path = app_data_dir.join("orbit_crew_health.db");
-            
-            log_debug(&format!("Initializing SQLite at: {:?}", db_path));
-            let database = Database::new(&db_path)
-                .map_err(|e| {
-                    log_debug(&format!("DATABASE INIT ERROR: {}", e));
-                    Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)) as Box<dyn std::error::Error>
-                })?;
+            std::fs::create_dir_all(&app_data_dir)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            log_debug(&format!("Account database directory: {:?}", app_data_dir));
 
             app.manage(AppState {
-                db: Arc::new(database),
+                db_dir: app_data_dir,
                 rppg: Arc::new(RppgManager::default()),
             });
             log_debug("Setup completed successfully");

@@ -127,11 +127,13 @@ Reports are snapshots of saved records at preview time. Generate a fresh preview
 
 ## Accounts and synchronization roadmap
 
-See [the accounts and synchronization plan](docs/accounts-and-sync-plan.md) for proposed identity, access controls, encrypted local workspaces, offline synchronization, conflict handling, migration, and delivery milestones. This is a design plan; account login and cloud sync are not implemented yet.
+The app now has a local prototype login for Ryan, Tharusha, Hansaja, and Apurwa (password `1234` for each). There is no sign-up. This is only a UI gate: the credentials are hardcoded in the frontend and can be read or bypassed by someone with access to the app or device. Data is not encrypted. Browser check-ins are kept in separate IndexedDB workspaces; Tauri check-ins use separate per-account SQLite files. Existing unassigned browser records and the previous shared desktop database are left untouched and are not automatically assigned to an account. Export/import records into the intended account if needed. Do not use this prototype login to protect real medical records.
+
+See [the accounts and synchronization plan](docs/accounts-and-sync-plan.md) for production identity, access controls, encrypted local workspaces, offline synchronization, conflict handling, migration, and delivery milestones. Cloud sync is not implemented.
 
 ## Workspace storage foundation (browser)
 
-The local-only workspace now uses IndexedDB. Each save, edit, import, or delete commits a record change and a durable outbox entry in the same transaction. A journal count is displayed in the app. This is preparation for a future sync engine: no account exists, no journal entries are uploaded, and the queue is not automatically assigned to a future account.
+Each browser crew account uses its own IndexedDB workspace. Each save, edit, import, or delete commits a record change and a durable outbox entry in the same transaction. The old local-only workspace remains available for legacy data but is not automatically assigned to a crew account. No journal entries are uploaded, and the queue is not assigned to a future cloud account.
 
 Migration validates and verifies existing records before committing its completion marker. It is repeatable after interruption and keeps the original localStorage array unchanged as a recovery source. Export a fresh JSON backup after migration; the retained array is a one-time source, not a live mirror. Close old Orbit windows and update the installed app before editing so an older release cannot keep writing to the obsolete storage location. Rolling back to the old release will not show newer IndexedDB changes; use a fresh export instead.
 

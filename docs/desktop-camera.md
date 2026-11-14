@@ -1,6 +1,6 @@
 # Desktop camera setup and validation
 
-Orbit's Tauri app can launch a local Python process to extract facial RGB values and produce an experimental pulse estimate. It does not measure SpO2, respiration, perfusion, or ECG. Estimates have not been medically validated. Browser mode offers a labelled synthetic demonstration and does not connect to a camera.
+Orbit's Tauri app can launch a local Python process to track facial landmarks, extract facial RGB values, and produce experimental pulse and breathing-rate estimates. Pulse extraction uses a lightweight POS-style RGB projection inspired by the unsupervised methods in [rPPG-Toolbox](https://github.com/ubicomplab/rPPG-Toolbox). The breathing-rate estimate comes from slow green-channel changes and needs about 20 seconds of continuous face signal. Relative pulse amplitude is a color-signal proxy, not a calibrated perfusion index. An RGB oxygenation index uses the red/blue pulse-amplitude ratio, but has no device-specific calibration and is not an SpO2 percentage. None of these estimates have been validated for medical use. Browser mode offers a labelled synthetic demonstration and does not connect to a camera.
 
 ## Python environment
 
@@ -45,7 +45,7 @@ The native launcher resolves the script and model from application resources in 
 1. Start the Tauri app and open Real-Time. The initial waveform is explicitly a demo.
 2. Choose Connect rPPG Feed. Allow camera access if macOS asks. Check System Settings → Privacy & Security → Camera if permission was denied. During development the permission may apply to the terminal/Python process; verify the installed app separately.
 3. Startup errors appear in the panel. Missing libraries, a missing model, or unavailable hardware must not produce synthetic camera data.
-4. Once a face is detected, pulse estimates may appear after enough frames. Missing faces clear the displayed estimate. Other sensor fields show “Not measured.”
+4. The local preview shows a face box and sparse landmark overlay. Pulse and RGB color ratios may appear after a few seconds; the breathing estimate needs about 20 seconds of face signal. Missing faces clear current estimates. The RGB oxygenation index is not SpO2, and relative pulse amplitude is not perfusion index.
 5. Disconnect and reconnect. Navigate away and verify the camera stops; close the application and verify no camera process remains.
 6. Test a denied permission, busy camera, missing Python, missing dependencies, and app launch from another directory. Run these checks with the actual packaged app on every target OS.
 

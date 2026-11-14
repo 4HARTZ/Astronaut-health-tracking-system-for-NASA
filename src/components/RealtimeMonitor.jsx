@@ -21,8 +21,13 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
   const [heartRate, setHeartRate] = useState(68);
   const [spO2, setSpO2] = useState(98);
   const [respiration, setRespiration] = useState(14);
+  const [cameraRespiration, setCameraRespiration] = useState(null);
+  const [relativePulseAmplitude, setRelativePulseAmplitude] = useState(null);
+  const [cameraSignalSeconds, setCameraSignalSeconds] = useState(null);
+  const [cameraOxygenationIndex, setCameraOxygenationIndex] = useState(null);
   const [rppgConnected, setRppgConnected] = useState(false);
   const [rppgTelemetry, setRppgTelemetry] = useState(null);
+  const [facePreview, setFacePreview] = useState(null);
   const [rppgStatusMsg, setRppgStatusMsg] = useState('Demo mode. No sensor is connected.');
   const [cameraPending, setCameraPending] = useState(false);
   const [cameraMode, setCameraMode] = useState(false);
@@ -47,7 +52,12 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
         detachListeners();
         setRppgConnected(false);
         setRppgTelemetry(null);
+        setFacePreview(null);
         setHeartRate(null);
+        setCameraRespiration(null);
+        setRelativePulseAmplitude(null);
+        setCameraSignalSeconds(null);
+        setCameraOxygenationIndex(null);
         livePulseRef.current = 0;
         setRppgStatusMsg('Camera stopped. No current measurement.');
       } catch (err) { setRppgStatusMsg(`Could not stop camera: ${err}`); }
@@ -58,6 +68,11 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
     setCameraMode(true);
     setHeartRate(null);
     setRppgTelemetry(null);
+    setFacePreview(null);
+    setCameraRespiration(null);
+    setRelativePulseAmplitude(null);
+    setCameraSignalSeconds(null);
+    setCameraOxygenationIndex(null);
     livePulseRef.current = 0;
     setRppgStatusMsg('Starting camera…');
     const listeners = [];
@@ -75,13 +90,21 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
         }
         if (['error', 'stopped'].includes(data.state)) {
           setRppgConnected(false); setCameraPending(false);
-          setHeartRate(null); setRppgTelemetry(null); livePulseRef.current = 0;
+          setHeartRate(null); setRppgTelemetry(null); setFacePreview(null); setCameraRespiration(null); setRelativePulseAmplitude(null); setCameraSignalSeconds(null); setCameraOxygenationIndex(null); livePulseRef.current = 0;
         }
+      }));
+      listeners.push(await api.listen('rppg-preview', ({ payload: data }) => {
+        if (token !== session.current || typeof data.jpeg !== 'string') return;
+        setFacePreview(data.jpeg);
       }));
       listeners.push(await api.listen('rppg-telemetry', ({ payload: data }) => {
         if (token !== session.current) return;
         const measured = !data.simulated && data.faceDetected;
         setHeartRate(measured && Number.isFinite(data.estimatedBpm) ? Math.round(data.estimatedBpm) : null);
+        setCameraRespiration(measured && Number.isFinite(data.respirationRate) ? data.respirationRate : null);
+        setRelativePulseAmplitude(measured && Number.isFinite(data.relativePulseAmplitude) ? data.relativePulseAmplitude : null);
+        setCameraSignalSeconds(measured && Number.isFinite(data.faceSignalSeconds) ? data.faceSignalSeconds : null);
+        setCameraOxygenationIndex(measured && Number.isFinite(data.rgbOxygenationIndex) ? data.rgbOxygenationIndex : null);
         setRppgTelemetry(measured ? data : null);
         livePulseRef.current = measured && Number.isFinite(data.pulseValue) ? data.pulseValue : 0;
         setRppgStatusMsg(data.simulated ? 'Synthetic stream rejected: no camera measurement.' : measured ? 'Experimental camera feed. Pulse estimate is unvalidated.' : 'No face detected. No current measurement.');
@@ -94,6 +117,11 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
       if (token !== session.current) return;
       unlistenRef.current = null;
       setRppgConnected(false); setCameraPending(false);
+      setFacePreview(null);
+      setCameraRespiration(null);
+      setRelativePulseAmplitude(null);
+      setCameraSignalSeconds(null);
+      setCameraOxygenationIndex(null);
       setRppgStatusMsg(`Camera unavailable: ${err}`);
     }
   }
@@ -109,13 +137,13 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
     setStoreLiveVitals({
       heartRate,
       spO2: cameraMode ? null : spO2,
-      respiration: cameraMode ? null : respiration,
+      respiration: cameraMode ? cameraRespiration : respiration,
       perfusionIndex: cameraMode ? null : 4.8,
       simulated: !cameraMode,
       isStreaming: isRunning,
       leadStatus: cameraMode ? 'Experimental camera; unavailable without a face signal' : 'Demonstration only',
     });
-  }, [heartRate, spO2, respiration, isRunning, rppgConnected, cameraMode, setStoreLiveVitals]);
+  }, [heartRate, spO2, respiration, cameraRespiration, isRunning, rppgConnected, cameraMode, setStoreLiveVitals]);
 
   // Draw smooth real-time simulated ECG/PPG telemetry on HTML5 Canvas
   useEffect(() => {
@@ -169,11 +197,11 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
       if (dataPoints.length > maxPoints) dataPoints.shift();
 
       // Clear with subtle sweep trail
-      ctx.fillStyle = '#080d18';
+      ctx.fillStyle = '#101c30';
       ctx.fillRect(0, 0, width, height);
 
       // Grid Lines
-      ctx.strokeStyle = '#111e33';
+      ctx.strokeStyle = '#1b2b42';
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (let x = 0; x < width; x += 40) {
@@ -187,8 +215,8 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
       ctx.stroke();
 
       // Draw ECG / PPG Waveform
-      ctx.strokeStyle = rppgConnected ? '#10b981' : '#06b6d4';
-      ctx.shadowColor = rppgConnected ? '#10b981' : '#06b6d4';
+      ctx.strokeStyle = rppgConnected ? '#83cdbb' : '#83dce8';
+      ctx.shadowColor = rppgConnected ? '#83cdbb' : '#83dce8';
       ctx.shadowBlur = 8;
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -203,7 +231,7 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
 
       // Draw sweeping lead head
       const leadX = (dataPoints.length / maxPoints) * width;
-      ctx.fillStyle = rppgConnected ? '#34d399' : '#38bdf8';
+      ctx.fillStyle = rppgConnected ? '#83cdbb' : '#83dce8';
       ctx.beginPath();
       ctx.arc(leadX, dataPoints[dataPoints.length - 1] || mid, 4, 0, Math.PI * 2);
       ctx.fill();
@@ -233,7 +261,7 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
             {cameraMode ? 'EXPERIMENTAL CAMERA · UNVALIDATED' : 'DEMONSTRATION · SYNTHETIC WAVEFORM'}
           </span>
           <h2 className="text-xl font-bold text-white mt-1">Real-Time Monitor Prototype</h2>
-          <p className="text-xs mt-2">Demo values are synthetic and are never saved as check-ins. Camera mode estimates pulse only; it does not measure oxygen saturation, respiration, or perfusion.</p>
+          <p className="text-xs mt-2">Demo waveform values are synthetic and never saved. Camera readings are experimental estimates, not clinically validated; this camera cannot measure SpO₂.</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -288,28 +316,28 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
           <div className="p-3.5 rounded-[3px] bg-[#1e2633] border border-[#2a475e]">
             <div className="text-[11px] uppercase font-mono text-[#8f98a0]">Oxygen Saturation</div>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-3xl font-bold font-mono text-[#a4d007]">{cameraMode ? '—' : spO2}</span>
-              <span className="text-xs text-[#8f98a0] font-mono">% SpO₂</span>
+              <span className="text-3xl font-bold font-mono text-[#a4d007]">{cameraMode ? (cameraOxygenationIndex ?? '—') : spO2}</span>
+              <span className="text-xs text-[#8f98a0] font-mono">{cameraMode ? 'ratio' : '% SpO₂'}</span>
             </div>
-            <div className="text-xs text-[#8f98a0] mt-1.5">{cameraMode ? 'Not measured' : 'Demo value'}</div>
+            <div className="text-xs text-[#8f98a0] mt-1.5">{cameraMode ? 'RGB oxygenation index · not SpO₂' : 'Demo value'}</div>
           </div>
 
           <div className="p-3.5 rounded-[3px] bg-[#1e2633] border border-[#2a475e]">
             <div className="text-[11px] uppercase font-mono text-[#8f98a0]">Respiration Rate</div>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-3xl font-bold font-mono text-[#66c0f4]">{cameraMode ? '—' : respiration}</span>
+              <span className="text-3xl font-bold font-mono text-[#66c0f4]">{cameraMode ? (cameraRespiration ?? '—') : respiration}</span>
               <span className="text-xs text-[#8f98a0] font-mono">BrPM</span>
             </div>
-            <div className="text-xs text-[#8f98a0] mt-1.5">{cameraMode ? 'Not measured' : 'Demo value'}</div>
+            <div className="text-xs text-[#8f98a0] mt-1.5">{cameraMode ? (cameraRespiration == null ? (cameraSignalSeconds == null ? 'Waiting for face tracking' : `Collecting signal · ${Math.min(20, Math.floor(cameraSignalSeconds))}/20 s`) : 'Exploratory estimate · unvalidated') : 'Demo value'}</div>
           </div>
 
           <div className="p-3.5 rounded-[3px] bg-[#1e2633] border border-[#2a475e]">
-            <div className="text-[11px] uppercase font-mono text-[#8f98a0]">Perfusion Index</div>
+            <div className="text-[11px] uppercase font-mono text-[#8f98a0]">{cameraMode ? 'Relative Pulse Amplitude' : 'Perfusion Index'}</div>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-3xl font-bold font-mono text-[#c6d4df]">{cameraMode ? '—' : '4.8'}</span>
-              <span className="text-xs text-[#8f98a0] font-mono">PI %</span>
+              <span className="text-3xl font-bold font-mono text-[#c6d4df]">{cameraMode ? (relativePulseAmplitude ?? '—') : '4.8'}</span>
+              <span className="text-xs text-[#8f98a0] font-mono">{cameraMode ? '%' : 'PI %'}</span>
             </div>
-            <div className="text-xs text-[#a4d007] mt-1.5">{cameraMode ? 'Not measured' : 'Demo value'}</div>
+            <div className="text-xs text-[#a4d007] mt-1.5">{cameraMode ? (relativePulseAmplitude == null ? 'Waiting for pulse samples' : 'Color pulse proxy · not clinical PI') : 'Demo value'}</div>
           </div>
         </div>
       </div>
@@ -334,6 +362,27 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
             Sidecar pipeline: <code className="text-[#66c0f4] bg-[#101822] px-1.5 py-0.5 rounded-[2px] border border-[#2a475e]">rppg/rppg_streamer.py</code>. Uses MediaPipe Face Landmarker to extract RGB micro-pulsations from facial capillaries and calculates real-time pulse.
           </p>
 
+          <div className="relative overflow-hidden rounded-[4px] border border-[#2a475e] bg-[#080d18] aspect-video max-h-64 flex items-center justify-center">
+            {facePreview ? (
+              <img
+                src={`data:image/jpeg;base64,${facePreview}`}
+                alt="Live camera preview with face landmark tracking overlay"
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <div className="text-center px-5">
+                <Camera className="w-7 h-7 mx-auto mb-2 text-[#52657a]" />
+                <p className="text-xs font-mono text-[#8f98a0] m-0">
+                  {cameraMode ? 'Waiting for camera frames…' : 'Live face preview appears after connecting the camera'}
+                </p>
+              </div>
+            )}
+            <span className="absolute top-2 left-2 px-2 py-1 rounded-sm bg-[#080d18]/90 border border-[#2a475e] text-[10px] font-mono tracking-wide text-[#80ffc0]">
+              {facePreview ? 'LOCAL · FACE LANDMARK TRACKING' : 'CAMERA PREVIEW'}
+            </span>
+            {facePreview && <span className="absolute bottom-2 right-2 px-2 py-1 rounded-sm bg-[#080d18]/90 border border-[#2a475e] text-[10px] font-mono text-[#8f98a0]">VIDEO STAYS ON THIS DEVICE</span>}
+          </div>
+
           <div className="p-3.5 rounded-[3px] bg-[#101822] border border-[#2a475e] flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
             <div>
               <div className="text-[#8f98a0]">Status: <span className="text-[#c6d4df]">{rppgStatusMsg}</span></div>
@@ -349,7 +398,7 @@ export default function RealtimeMonitor({ cameraApi = loadCameraApi, isDesktop =
                   : '!bg-[#212c3d] !text-[#66c0f4] !border-[#3d4f68] hover:!text-white'
               }`}
             >
-              {!isDesktop ? 'Camera requires desktop app' : cameraPending ? 'Starting camera…' : rppgConnected ? 'Disconnect rPPG' : 'Connect rPPG Feed'}
+              {!isDesktop ? 'Available in desktop app' : cameraPending ? 'Starting camera…' : rppgConnected ? 'Disconnect camera' : 'Connect camera'}
             </button>
           </div>
         </div>

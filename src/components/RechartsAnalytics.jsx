@@ -66,9 +66,9 @@ export default function RechartsAnalytics({ entries }) {
         <div>
           <span className="text-[11px] font-mono tracking-wider text-[#66c0f4] font-bold uppercase flex items-center gap-2">
             <Activity className="w-4 h-4 text-[#66c0f4]" />
-            MULTI-METRIC LONGITUDINAL COMPARISON
+            SAVED CHECK-IN TRENDS
           </span>
-          <h3 className="text-lg font-bold text-white mt-1 m-0">Interactive Telemetry Correlation</h3>
+          <h3 className="text-lg font-bold text-white mt-1 m-0">Compare your history</h3>
         </div>
 
         {/* View Switcher Tabs */}
@@ -121,56 +121,56 @@ export default function RechartsAnalytics({ entries }) {
           <ResponsiveContainer width="100%" height="100%">
             {viewMode === 'cardio' ? (
               <LineChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a475e" />
-                <XAxis dataKey="dateLabel" stroke="#8f98a0" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#8f98a0" tick={{ fontSize: 11 }} domain={['auto', 'auto']} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#31455c" />
+                <XAxis dataKey="dateLabel" stroke="#8295aa" tick={{ fontSize: 11 }} />
+                <YAxis stroke="#8295aa" tick={{ fontSize: 11 }} domain={['auto', 'auto']} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
                 <Line
                   type="monotone"
                   dataKey="heartRate"
                   name="Heart Rate (BPM)"
-                  stroke="#66c0f4"
+                  stroke="#83dce8"
                   strokeWidth={2}
-                  dot={{ r: 3, fill: '#66c0f4' }}
+                  dot={{ r: 3, fill: '#83dce8' }}
                   activeDot={{ r: 4 }}
                 />
                 <Line
                   type="monotone"
                   dataKey="systolic"
                   name="Systolic BP (mmHg)"
-                  stroke="#e58e26"
+                  stroke="#e4bd7a"
                   strokeWidth={2}
                   strokeDasharray="4 4"
-                  dot={{ r: 3, fill: '#e58e26' }}
+                  dot={{ r: 3, fill: '#e4bd7a' }}
                 />
                 <Line
                   type="monotone"
                   dataKey="diastolic"
                   name="Diastolic BP (mmHg)"
-                  stroke="#1a9fff"
+                  stroke="#b3afe0"
                   strokeWidth={1.5}
-                  dot={{ r: 2, fill: '#1a9fff' }}
+                  dot={{ r: 2, fill: '#b3afe0' }}
                 />
               </LineChart>
             ) : viewMode === 'sleep' ? (
               <AreaChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="sleepGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#66c0f4" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#66c0f4" stopOpacity={0.0} />
+                    <stop offset="5%" stopColor="#83dce8" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#83dce8" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a475e" />
-                <XAxis dataKey="dateLabel" stroke="#8f98a0" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#8f98a0" tick={{ fontSize: 11 }} domain={[0, 12]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#31455c" />
+                <XAxis dataKey="dateLabel" stroke="#8295aa" tick={{ fontSize: 11 }} />
+                <YAxis stroke="#8295aa" tick={{ fontSize: 11 }} domain={[0, 12]} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
                 <Area
                   type="monotone"
                   dataKey="sleep"
                   name="Sleep Duration (hrs)"
-                  stroke="#66c0f4"
+                  stroke="#83dce8"
                   fillOpacity={1}
                   fill="url(#sleepGrad)"
                   strokeWidth={2}
@@ -179,33 +179,33 @@ export default function RechartsAnalytics({ entries }) {
                   type="monotone"
                   dataKey="quality"
                   name="Quality Rating (1–5)"
-                  stroke="#a4d007"
+                  stroke="#83cdbb"
                   strokeWidth={2}
-                  dot={{ r: 3, fill: '#a4d007' }}
+                  dot={{ r: 3, fill: '#83cdbb' }}
                 />
               </AreaChart>
             ) : (
               <LineChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a475e" />
-                <XAxis dataKey="dateLabel" stroke="#8f98a0" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#8f98a0" tick={{ fontSize: 11 }} domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#31455c" />
+                <XAxis dataKey="dateLabel" stroke="#8295aa" tick={{ fontSize: 11 }} />
+                <YAxis stroke="#8295aa" tick={{ fontSize: 11 }} domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
                 <Line
                   type="monotone"
                   dataKey="mood"
                   name="Mood (Higher is Better)"
-                  stroke="#a4d007"
+                  stroke="#83cdbb"
                   strokeWidth={2}
-                  dot={{ r: 3, fill: '#a4d007' }}
+                  dot={{ r: 3, fill: '#83cdbb' }}
                 />
                 <Line
                   type="monotone"
                   dataKey="stress"
                   name="Stress (Higher is Worse)"
-                  stroke="#e58e26"
+                  stroke="#e4bd7a"
                   strokeWidth={2}
-                  dot={{ r: 3, fill: '#e58e26' }}
+                  dot={{ r: 3, fill: '#e4bd7a' }}
                 />
               </LineChart>
             )}

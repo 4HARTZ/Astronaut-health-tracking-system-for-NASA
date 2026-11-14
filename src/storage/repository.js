@@ -108,13 +108,13 @@ export function createRepository(db,workspace=LOCAL_WORKSPACE,{uuid=()=>crypto.r
  }
  return {workspace,snapshot,migrateLegacy,save,remove,importBackup,cognitiveSessions,saveCognitiveSession,importCognitiveBackup};
 }
-export async function initializeLocalRepository(){
+export async function initializeLocalRepository(workspace=LOCAL_WORKSPACE){
  const db=await openDatabase();
  const channel=typeof BroadcastChannel!=='undefined'?new BroadcastChannel('orbit-storage'):null;
- const repo=createRepository(db,LOCAL_WORKSPACE,{notify:workspace=>channel?.postMessage({workspace})});
- try{await repo.migrateLegacy(window.localStorage);}catch(error){db.close();channel?.close();throw error;}
+ const repo=createRepository(db,workspace,{notify:changedWorkspace=>channel?.postMessage({workspace:changedWorkspace})});
+ try{if(workspace===LOCAL_WORKSPACE)await repo.migrateLegacy(window.localStorage);}catch(error){db.close();channel?.close();throw error;}
  return {...repo,subscribe(callback){
-  const listener=event=>{if(event.data?.workspace===LOCAL_WORKSPACE)callback();};
+  const listener=event=>{if(event.data?.workspace===workspace)callback();};
   channel?.addEventListener('message',listener);
   const visible=()=>{if(document.visibilityState==='visible')callback();};document.addEventListener('visibilitychange',visible);
   return ()=>{channel?.removeEventListener('message',listener);document.removeEventListener('visibilitychange',visible);};

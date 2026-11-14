@@ -117,6 +117,7 @@ impl RppgManager {
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
                     match json.get("type").and_then(|v| v.as_str()).unwrap_or("") {
                         "telemetry" => { let _ = app.emit("rppg-telemetry", &json); }
+                        "preview" => { let _ = app.emit("rppg-preview", &json); }
                         "status" | "error" | "warning" => {
                             // Remember only after dependencies, model and camera opened.
                             // Finder launches can then use the same environment without
