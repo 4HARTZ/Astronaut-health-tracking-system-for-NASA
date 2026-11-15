@@ -1,0 +1,2 @@
+Panic occurred: Failed to initialize gtk backend!: BoolError { message: "Failed to initialize GTK", filename: "/home/jeremy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gtk-0.18.2/src/rt.rs", function: "gtk::rt::init", line: 141 }
+Location: Some(Location { file: "/home/jeremy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tao-0.37.2/src/platform_impl/linux/event_loop.rs", line: 219, column: 53 })

@@ -27,12 +27,28 @@ export default function LoginPage({ onLogin }) {
         <span className="login-orbit-core"><Orbit size={34} strokeWidth={1.2} /></span>
       </div>
 
-      <div className="login-content">
+      <div className="login-shell">
+        <section className="login-story" aria-label="Orbit crew wellness workspace">
         <a className="login-brand" href="#login-title" aria-label="Orbit home">
           <span className="login-brand-mark"><Orbit size={19} /></span>
           <span>ORBIT <small>CREW HEALTH</small></span>
         </a>
 
+        <div className="login-story-copy">
+          <span className="login-kicker">CREW HEALTH INTELLIGENCE</span>
+          <h2>Wellness, seen as a whole.</h2>
+          <p>Bring check-ins, body systems, and personal health history into one calm crew workspace.</p>
+        </div>
+
+        <div className="login-story-cards" aria-label="Workspace features">
+          <article><span>01 · SYSTEMS</span><strong>Connected health view</strong><small>Explore how measurements contribute to each body system.</small></article>
+          <article><span>02 · HISTORY</span><strong>Personal check-ins</strong><small>Review recent readings and changes over time.</small></article>
+          <article><span>03 · ON DEVICE</span><strong>Separate crew spaces</strong><small>Each account uses its own local workspace.</small></article>
+        </div>
+        <p className="login-story-note"><span aria-hidden="true" /> LOCAL WORKSPACE <i /> ORBIT CREW WELLNESS</p>
+        </section>
+
+        <div className="login-content">
         <section className="login-card">
           <div className="login-card-heading">
             <span className="login-kicker">PERSONAL CREW WORKSPACE</span>
@@ -41,30 +57,34 @@ export default function LoginPage({ onLogin }) {
           </div>
 
           <form onSubmit={submit} noValidate>
-            <label htmlFor="crew-account">Crew account</label>
-            <select
-              id="crew-account"
-              autoComplete="username"
-              value={username}
-              onChange={(event) => { setUsername(event.target.value); setError(''); }}
-              required
-            >
-              <option value="">Choose your account</option>
-              {DEMO_CREW.map((crew) => <option key={crew.id} value={crew.id}>{crew.name}</option>)}
-            </select>
-
-            <label htmlFor="crew-password">Password</label>
-            <div className="login-password-wrap">
-              <LockKeyhole size={17} aria-hidden="true" />
-              <input
-                id="crew-password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => { setPassword(event.target.value); setError(''); }}
-                placeholder="Enter your password"
+            <div className="login-field">
+              <label htmlFor="crew-account">Crew account</label>
+              <select
+                id="crew-account"
+                autoComplete="username"
+                value={username}
+                onChange={(event) => { setUsername(event.target.value); setError(''); }}
                 required
-              />
+              >
+                <option value="">Choose your account</option>
+                {DEMO_CREW.map((crew) => <option key={crew.id} value={crew.id}>{crew.name}</option>)}
+              </select>
+            </div>
+
+            <div className="login-field">
+              <label htmlFor="crew-password">Password</label>
+              <div className="login-password-wrap">
+                <LockKeyhole size={17} aria-hidden="true" />
+                <input
+                  id="crew-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => { setPassword(event.target.value); setError(''); }}
+                  placeholder="Enter your password"
+                  required
+                />
+              </div>
             </div>
 
             {error && <p className="login-error" role="alert">{error}</p>}
@@ -80,6 +100,7 @@ export default function LoginPage({ onLogin }) {
         </section>
 
         <p className="login-footer">ORBIT · A local health check-in prototype</p>
+        </div>
       </div>
     </main>
   );

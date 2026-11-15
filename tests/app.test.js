@@ -29,6 +29,15 @@ async function mount(records=[]){
  return user;
 }
 const heart=()=>screen.getByLabelText(/Resting heart rate · bpm/);
+test('integrated dashboard selects body systems and keeps missing inputs unavailable',async()=>{
+ await mount([sample]);
+ assert.ok(screen.getByRole('heading',{name:'Integrated health intelligence'}));
+ assert.equal(screen.queryByText(/SIMULATED DEMONSTRATION DATA/),null);
+ assert.ok(screen.getAllByText('64 bpm').length > 0);
+ fireEvent.click(screen.getByRole('button',{name:/Lungs \/ respiratory/}));
+ assert.ok(screen.getByRole('heading',{name:'Respiratory'}));
+ assert.ok(screen.getByText('No recent measurements are mapped to this region.'));
+});
 test('breathing guide replaces games, pauses and stops without saving health data',async()=>{
  const user=await mount();assert.equal(screen.queryByRole('button',{name:'Practice Signal Watch'}),null);
  assert.equal(screen.queryByRole('button',{name:'Plant somewhere'}),null);
@@ -83,7 +92,7 @@ test('imports compatible backups, rejects malformed backup and renders chart',as
  const second={...sample,id:'second',time:'2026-01-02T12:00:00Z',heartRate:70};
  fireEvent.change(input,{target:{files:[{size:100,text:async()=>JSON.stringify({schemaVersion:1,entries:[sample,second]})}]}});
  await waitFor(async()=>assert.equal((await rows()).length,2));
- assert.ok(screen.getByRole('img',{name:/Resting heart rate/}));assert.match(document.body.textContent,/64 → 70/);
+ assert.ok(screen.getAllByRole('img',{name:/Resting heart rate/}).length > 0);assert.match(document.body.textContent,/64 → 70/);
  fireEvent.change(input,{target:{files:[{size:100,text:async()=>'{broken'}]}});
  await waitFor(()=>assert.match(document.body.textContent,/Invalid JSON file/));assert.equal((await rows()).length,2);
 });

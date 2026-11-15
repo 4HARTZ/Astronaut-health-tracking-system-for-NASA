@@ -6,14 +6,17 @@ export const definitions = [
  ['sleep','Sleep duration','hours',0,24,0.1],
  ['quality','Sleep quality','1–5 · higher is better',1,5,1],
  ['mood','Mood','1–5 · higher is better',1,5,1],
- ['stress','Stress','1–5 · higher is more stress',1,5,1]
+ ['stress','Stress','1–5 · higher is more stress',1,5,1],
+ ['spO2','Blood oxygen saturation','%',50,100,1],
+ ['respiration','Respiratory rate','breaths/min',1,80,1],
+ ['urineColor','Urine colour','1–8 · lighter to darker',1,8,1]
 ];
 
 export const STORAGE_KEY = "orbit-health-v1";
 export const contexts = ["Resting", "After exercise", "Other"];
 export const ratings={quality:['Very poor','Poor','Fair','Good','Very good'],mood:['Very low','Low','Neutral','Good','Very good'],stress:['Very low','Low','Moderate','High','Very high']};
 export function valid(entry){
- return entry && typeof entry.id==='string' && entry.id.length>0 && entry.id.length<=100 && typeof entry.time==='string' && Number.isFinite(Date.parse(entry.time)) && Date.parse(entry.time)<=Date.now() && ['Resting','After exercise','Other'].includes(entry.context) && typeof entry.notes==='string' && entry.notes.length<=2000 && definitions.every(([name,,,min,max,step])=>entry[name]===null || (typeof entry[name]==='number' && Number.isFinite(entry[name]) && entry[name]>=min && entry[name]<=max && Math.abs(entry[name]/step-Math.round(entry[name]/step))<0.00001)) && ((entry.systolic===null)===(entry.diastolic===null));
+ return entry && typeof entry.id==='string' && entry.id.length>0 && entry.id.length<=100 && typeof entry.time==='string' && Number.isFinite(Date.parse(entry.time)) && Date.parse(entry.time)<=Date.now() && (entry.submittedAt==null || (typeof entry.submittedAt==='string' && Number.isFinite(Date.parse(entry.submittedAt)) && Date.parse(entry.submittedAt)<=Date.now())) && ['Resting','After exercise','Other'].includes(entry.context) && typeof entry.notes==='string' && entry.notes.length<=2000 && (entry.simulated===undefined || typeof entry.simulated==='boolean') && definitions.every(([name,,,min,max,step])=>entry[name]===null || entry[name]===undefined || (typeof entry[name]==='number' && Number.isFinite(entry[name]) && entry[name]>=min && entry[name]<=max && Math.abs(entry[name]/step-Math.round(entry[name]/step))<0.00001)) && ((entry.systolic==null)===(entry.diastolic==null));
 }
 
 export function prepareImport(backup,current){
@@ -24,11 +27,13 @@ export function prepareImport(backup,current){
  for(const entry of backup.entries){
   const old=existing.get(entry.id);
   if(old){
-   const fields=['time','context','notes',...definitions.map(([name])=>name)];
-   if(fields.every(name=>old[name]===entry[name]))duplicates++;else conflicts++;
+   const fields=['time','context','notes','submittedAt',...definitions.map(([name])=>name)];
+   const sameValues=fields.every(name=>['time','context','notes'].includes(name)?old[name]===entry[name]:name==='submittedAt'?(old[name]??null)===(entry[name]??null):(old[name]??null)===(entry[name]??null));
+   if(sameValues&&(old.simulated===true)===(entry.simulated===true))duplicates++;else conflicts++;
   }else{
-   const clean={id:entry.id,time:entry.time,context:entry.context,notes:entry.notes};
-   for(const [name] of definitions)clean[name]=entry[name];additions.push(clean);
+   const clean={id:entry.id,time:entry.time,submittedAt:entry.submittedAt,context:entry.context,notes:entry.notes,simulated:entry.simulated===true};
+   for(const [name] of definitions)clean[name]=entry[name]??null;
+   additions.push(clean);
   }
  }
  return {next:[...current,...additions].sort((a,b)=>Date.parse(b.time)-Date.parse(a.time)),added:additions.length,duplicates,conflicts};

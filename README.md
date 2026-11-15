@@ -70,6 +70,14 @@ Tests use Node's test runner, React Testing Library, and jsdom. Build outputs pr
 
 Record resting heart rate, paired blood pressure, temperature, sleep duration and quality, mood, stress, and symptom notes. Missing measurements remain missing. Edit or delete records from history; edits can be cancelled and deletion requires confirmation.
 
+### Integrated health intelligence prototype
+
+The Vitals dashboard adds a clickable body map and an explainable fusion overview. Check-ins can also capture SpO₂, respiratory rate, and a urine-colour demonstration scale. Browser records retain the same IndexedDB record structure with optional new fields; existing records without them remain valid. A `submittedAt` timestamp is recorded on successful saves and drives the days-since-check timers; older records fall back to their measurement time. Tauri adds `sp_o2`, `respiration`, `urine_color`, `submitted_at`, and `simulated` columns to each account's existing SQLite database using an additive migration.
+
+Fusion is experimental demonstration logic, not a clinical assessment. Cardiovascular score is the equal-weight mean of available heart-rate, systolic-pressure, and diastolic-pressure prototype scores. Respiratory score equally combines available SpO₂ and respiratory-rate scores. Stress/recovery equally combines available stress, sleep duration, sleep quality, and mood scores. Hydration uses urine colour alone as a clearly qualified demonstration proxy. The overall indicator is the equal-weight mean of fresh (seven days or newer) system scores when at least two systems have data. Incomplete and outdated inputs are identified; missing inputs are never treated as healthy. The assumptions and scoring scales are centralized in `src/fusion.js` and are not medically validated.
+
+Ryan's dashboard seeds four dated synthetic check-ins only when Ryan's account workspace is empty. Seed records have `simulated: true` and visibly include **SIMULATED DEMONSTRATION DATA — NOT REAL MEDICAL RECORDS**. The other account workspaces are not seeded. Existing Ryan records are preserved. The integrated dashboard uses saved check-ins, not the separate live-monitor demonstration values.
+
 Charts filter by inclusive local dates and measurement context and show up to 100 recent available values per indicator, with dated text equivalents. What changed compares the most recent comparable pair per indicator in the same context. These observations do not infer causes or health status.
 
 This is a prototype, not a medical device. Entry limits are not clinical thresholds. There are no diagnoses, treatment recommendations, validated health scores, or approved clinical alerts. The advisory prototype fits a statistical baseline and generates unvalidated measurement review flags. Future medical rules require qualified mission medical review. Basic readings cannot assess bone density, radiation dose, or immune function.

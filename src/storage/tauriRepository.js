@@ -32,6 +32,11 @@ export async function initializeTauriRepository(accountId) {
       quality: e.quality == null ? null : Number(e.quality),
       mood: e.mood == null ? null : Number(e.mood),
       stress: e.stress == null ? null : Number(e.stress),
+      spO2: e.spO2 == null ? null : Number(e.spO2),
+      respiration: e.respiration == null ? null : Number(e.respiration),
+      urineColor: e.urineColor == null ? null : Number(e.urineColor),
+      submittedAt: e.submittedAt || null,
+      simulated: e.simulated === true,
       notes: e.notes || '',
     })));
 
@@ -86,6 +91,11 @@ export async function initializeTauriRepository(accountId) {
       quality: e.quality == null ? null : Number(e.quality),
       mood: e.mood == null ? null : Number(e.mood),
       stress: e.stress == null ? null : Number(e.stress),
+      spO2: e.spO2 == null ? null : Number(e.spO2),
+      respiration: e.respiration == null ? null : Number(e.respiration),
+      urineColor: e.urineColor == null ? null : Number(e.urineColor),
+      submittedAt: e.submittedAt || null,
+      simulated: e.simulated === true,
     }));
 
     const result = await invoke('db_import_backup', { accountId, entries: cleanList });

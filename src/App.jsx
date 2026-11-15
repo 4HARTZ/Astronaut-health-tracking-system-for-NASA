@@ -19,6 +19,8 @@ import { useMeasurementAdvisory, WarningSummary } from './components/Measurement
 import RechartsAnalytics from './components/RechartsAnalytics.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import BreathingGuide from './components/BreathingGuide.jsx';
+import HealthIntelligence from './components/HealthIntelligence.jsx';
+import { createRyanDemoEntries } from './fusion.js';
 import LoginPage from './components/LoginPage.jsx';
 import { DEMO_CREW, isDemoCrewId } from './auth/demoAccounts.js';
 
@@ -101,14 +103,20 @@ function OrbitWorkspace({ repositoryFactory, account, onLogout }) {
           return;
         }
         repoRef.current = repo;
-        setEntries(snapshot.entries);
-        setStoreEntries(snapshot.entries);
-        if (snapshot.stats) {
-          setDbStats(snapshot.stats);
-          setStoreStorageStats(snapshot.stats);
+        let initialSnapshot = snapshot;
+        if (account.id === 'ryan' && snapshot.entries.length === 0 && !isTestEnv) {
+          // Seed only an empty Ryan workspace. Repository import is transactional and idempotent by record ID.
+          await repo.importBackup({ schemaVersion: 1, entries: createRyanDemoEntries() });
+          initialSnapshot = await repo.snapshot();
         }
-        revisions.current = snapshot.revisions;
-        setPending(snapshot.pending);
+        setEntries(initialSnapshot.entries);
+        setStoreEntries(initialSnapshot.entries);
+        if (initialSnapshot.stats) {
+          setDbStats(initialSnapshot.stats);
+          setStoreStorageStats(initialSnapshot.stats);
+        }
+        revisions.current = initialSnapshot.revisions;
+        setPending(initialSnapshot.pending);
         setLoading(false);
 
         unsubscribe = repo.subscribe?.(() => {
@@ -149,10 +157,11 @@ function OrbitWorkspace({ repositoryFactory, account, onLogout }) {
     if (disabled) return;
     setBusy(true);
     try {
-      await repoRef.current.save(entry, editing ? editingRevision.current : null);
+      const submittedEntry = { ...entry, submittedAt: new Date().toISOString() };
+      await repoRef.current.save(submittedEntry, editing ? editingRevision.current : null);
       setMessage(editing ? 'Check-in updated on this device.' : 'Check-in saved on this device.');
       resetForm();
-      setSaved(entry);
+      setSaved(submittedEntry);
       try {
         await refresh();
       } catch {
@@ -249,7 +258,7 @@ function OrbitWorkspace({ repositoryFactory, account, onLogout }) {
         onLogout={onLogout}
       />
 
-      <main className="flex-1 w-full max-w-[1400px] mx-auto px-5 sm:px-8 py-7 space-y-6">
+      <main className="flex-1 w-full max-w-[1900px] mx-auto px-5 sm:px-8 py-7 space-y-6">
         {/* A calm overview with a clear next step and no invented mission data. */}
         {showVitals && (
           <section className="overview-hero" aria-labelledby="overview-title">
@@ -274,23 +283,25 @@ function OrbitWorkspace({ repositoryFactory, account, onLogout }) {
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#a4d007]"></span>
-              <strong className="text-white font-semibold">Local-only workspace:</strong>
+              <strong className="text-white font-semibold">Local workspace:</strong>
               <span role="status" className="text-[#c6d4df]">
                 {loading
                   ? 'Opening device records…'
                   : storageError ||
-                    'Records are saved on this device. Accounts and cloud synchronization are not connected.'}
+                    'Saved on this device.'}
               </span>
             </div>
             {!loading && !storageError && (
               <span className="hint font-mono text-[11px] text-[#8f98a0]">
-                {pending} local change{pending === 1 ? '' : 's'} in the device journal. No records have been uploaded. Storage is not encrypted yet.
+                {pending} pending · Not synced · Not encrypted
               </span>
             )}
           </div>
         </section>
 
         {!loading && !storageError && <WarningSummary result={measurementAssessment} onOpen={() => setActiveTab('advisory')} />}
+
+        {showVitals && !loading && <HealthIntelligence entries={entries} accountId={account.id} />}
 
         {/* FEATURE 1: Daily Routine & Baseline Metric Cards */}
         {showVitals && (

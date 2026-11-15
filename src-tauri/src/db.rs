@@ -53,6 +53,11 @@ impl Database {
                 quality REAL,
                 mood REAL,
                 stress REAL,
+                sp_o2 REAL,
+                respiration REAL,
+                urine_color REAL,
+                submitted_at TEXT,
+                simulated INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 deleted_at TEXT
@@ -69,13 +74,32 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_check_ins_deleted ON check_ins (deleted_at);"
         ).map_err(|e| format!("Migration failed: {}", e))?;
 
+        // Additive migration for databases created before integrated wellness.
+        for (name, declaration) in [
+            ("sp_o2", "REAL"),
+            ("respiration", "REAL"),
+            ("urine_color", "REAL"),
+            ("submitted_at", "TEXT"),
+            ("simulated", "INTEGER NOT NULL DEFAULT 0"),
+        ] {
+            let exists: bool = conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM pragma_table_info('check_ins') WHERE name = ?1)",
+                [name],
+                |row| row.get(0),
+            ).map_err(|e| e.to_string())?;
+            if !exists {
+                conn.execute(&format!("ALTER TABLE check_ins ADD COLUMN {name} {declaration}"), [])
+                    .map_err(|e| format!("Migration failed adding {name}: {e}"))?;
+            }
+        }
+
         Ok(())
     }
 
     pub fn get_entries(&self) -> Result<Vec<CheckInRecord>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn.prepare(
-            "SELECT id, time, context, notes, heart_rate, systolic, diastolic, temperature, sleep, quality, mood, stress
+            "SELECT id, time, context, notes, heart_rate, systolic, diastolic, temperature, sleep, quality, mood, stress, sp_o2, respiration, urine_color, submitted_at, simulated
              FROM check_ins
              WHERE deleted_at IS NULL
              ORDER BY time DESC"
@@ -95,6 +119,11 @@ impl Database {
                 quality: row.get(9)?,
                 mood: row.get(10)?,
                 stress: row.get(11)?,
+                sp_o2: row.get(12)?,
+                respiration: row.get(13)?,
+                urine_color: row.get(14)?,
+                submitted_at: row.get(15)?,
+                simulated: row.get::<_, i64>(16)? != 0,
             })
         }).map_err(|e| e.to_string())?;
 
@@ -113,8 +142,8 @@ impl Database {
 
         tx.execute(
             "INSERT INTO check_ins (
-                id, time, context, notes, heart_rate, systolic, diastolic, temperature, sleep, quality, mood, stress, created_at, updated_at, deleted_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, NULL)
+                id, time, context, notes, heart_rate, systolic, diastolic, temperature, sleep, quality, mood, stress, sp_o2, respiration, urine_color, submitted_at, simulated, created_at, updated_at, deleted_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?18, NULL)
             ON CONFLICT(id) DO UPDATE SET
                 time = excluded.time,
                 context = excluded.context,
@@ -127,6 +156,11 @@ impl Database {
                 quality = excluded.quality,
                 mood = excluded.mood,
                 stress = excluded.stress,
+                sp_o2 = excluded.sp_o2,
+                respiration = excluded.respiration,
+                urine_color = excluded.urine_color,
+                submitted_at = excluded.submitted_at,
+                simulated = excluded.simulated,
                 updated_at = excluded.updated_at,
                 deleted_at = NULL",
             params![
@@ -142,6 +176,11 @@ impl Database {
                 entry.quality,
                 entry.mood,
                 entry.stress,
+                entry.sp_o2,
+                entry.respiration,
+                entry.urine_color,
+                entry.submitted_at,
+                entry.simulated,
                 now,
             ],
         ).map_err(|e| format!("Save record failed: {}", e))?;
@@ -205,8 +244,8 @@ impl Database {
                 None => {
                     tx.execute(
                         "INSERT INTO check_ins (
-                            id, time, context, notes, heart_rate, systolic, diastolic, temperature, sleep, quality, mood, stress, created_at, updated_at, deleted_at
-                        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, NULL)",
+                            id, time, context, notes, heart_rate, systolic, diastolic, temperature, sleep, quality, mood, stress, sp_o2, respiration, urine_color, submitted_at, simulated, created_at, updated_at, deleted_at
+                        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?18, NULL)",
                         params![
                             entry.id,
                             entry.time,
@@ -220,6 +259,11 @@ impl Database {
                             entry.quality,
                             entry.mood,
                             entry.stress,
+                            entry.sp_o2,
+                            entry.respiration,
+                            entry.urine_color,
+                            entry.submitted_at,
+                            entry.simulated,
                             now,
                         ],
                     ).map_err(|e| e.to_string())?;
@@ -289,6 +333,11 @@ mod tests {
             quality: Some(4.0),
             mood: Some(4.0),
             stress: Some(2.0),
+            sp_o2: Some(98.0),
+            respiration: Some(14.0),
+            urine_color: Some(3.0),
+            submitted_at: Some("2026-11-14T12:00:00Z".into()),
+            simulated: false,
         };
 
         // Save
@@ -299,6 +348,7 @@ mod tests {
         let entries = db.get_entries().expect("Failed to get entries");
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].heart_rate, Some(64.0));
+        assert_eq!(entries[0].sp_o2, Some(98.0));
 
         // Stats
         let stats = db.get_stats().expect("Failed to get stats");

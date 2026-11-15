@@ -10,7 +10,7 @@ export default function CheckInForm({ entry, disabled, onSave, onCancel, message
  function readRecord(){
   const data=new FormData(formRef.current),timestamp=Date.parse(data.get('time'));
   if(!Number.isFinite(timestamp)||timestamp>Date.now())throw Error('Choose a valid measurement time that is not in the future.');
-  const record={id:entry?.id??crypto.randomUUID(),time:new Date(timestamp).toISOString(),context:data.get('context'),notes:data.get('notes').trim()};
+  const record={id:entry?.id??crypto.randomUUID(),time:new Date(timestamp).toISOString(),context:data.get('context'),notes:data.get('notes').trim(),simulated:entry?.simulated===true};
   definitions.forEach(([name])=>{record[name]=data.get(name)===''?null:Number(data.get(name));});
   if((record.systolic===null)!==(record.diastolic===null))throw Error('Enter both blood-pressure values, or leave both blank.');
   if(!definitions.some(([name])=>record[name]!==null)&&!record.notes)throw Error('Add at least one measurement, rating, or symptom note.');
@@ -40,7 +40,7 @@ export default function CheckInForm({ entry, disabled, onSave, onCancel, message
  <div hidden={!editing&&step!==0}><h3>Prepare your check-in</h3><p>Have your approved devices ready. Follow the mission procedure for each measurement and choose the context in which it was taken.</p>
  <label>Measurement time<input autoFocus={editing} name="time" type="datetime-local" step="1" defaultValue={entry?localInputTime(entry.time):localInputTime()} required/></label>
  <label>Context<select name="context" defaultValue={entry?.context??'Resting'}>{contexts.map(c=><option key={c}>{c}</option>)}</select></label></div>
- <div hidden={!editing&&step!==1}><h3>Body measurements</h3><p>Enter available readings with the units shown. Leave anything unmeasured blank. Enter both blood-pressure values together.</p>{fields(['heartRate','systolic','diastolic','temperature'])}<p className="hint">Input limits catch entry errors; they are not medical safety limits.</p></div>
+ <div hidden={!editing&&step!==1}><h3>Body measurements</h3><p>Enter available readings with the units shown. Leave anything unmeasured blank. Enter both blood-pressure values together.</p>{fields(['heartRate','systolic','diastolic','temperature','spO2','respiration','urineColor'])}<p className="hint">Input limits catch entry errors; they are not medical safety limits. Respiratory and urine readings are optional.</p></div>
  <div hidden={!editing&&step!==2}><h3>Sleep and wellbeing</h3><p>Reflect on your most recent sleep and how you feel now. Higher quality and mood ratings mean better; higher stress means more stress.</p>{fields(['sleep','quality','mood','stress'])}
  <label>Symptoms or notes<textarea name="notes" maxLength="2000" rows="3" defaultValue={entry?.notes??''}/></label></div>
  {!editing&&step===3&&review&&<section className="review"><h3>Review before saving</h3><p>{formatDate(review.time)} · {review.context}</p><dl>{definitions.map(([name,label,unit])=><div key={name}><dt>{label}</dt><dd>{review[name]===null?'Not recorded':`${review[name]} · ${unit}`}</dd></div>)}</dl><p className="saved-notes">{review.notes||'No symptom notes added.'}</p><p className="hint">Missing values will stay missing. Review the units and values; this is not a clinical assessment.</p></section>}

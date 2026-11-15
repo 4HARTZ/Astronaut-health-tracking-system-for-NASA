@@ -23,6 +23,16 @@ pub struct CheckInRecord {
     pub mood: Option<f64>,
     #[serde(default)]
     pub stress: Option<f64>,
+    #[serde(default)]
+    pub sp_o2: Option<f64>,
+    #[serde(default)]
+    pub respiration: Option<f64>,
+    #[serde(default)]
+    pub urine_color: Option<f64>,
+    #[serde(default)]
+    pub submitted_at: Option<String>,
+    #[serde(default)]
+    pub simulated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
