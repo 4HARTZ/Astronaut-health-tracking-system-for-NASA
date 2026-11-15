@@ -1,3 +1,7 @@
+## Desktop app integration
+
+For Orbit on macOS, Windows, or Linux, use [desktop camera setup](../docs/desktop-camera.md). `rppg_streamer.py` is the app bridge; the Ubuntu phone-camera walkthrough below describes the separate `rgb_extraction.py` prototype. The bridge does not silently simulate missing hardware. Synthetic output requires an explicit `--simulate` option and carries `simulated: true` on every sample.
+
 # HONOR Camera rPPG Prototype — Setup Guide (Ubuntu)
 
 This guide helps teammates reproduce the **local camera → face landmarks → facial RGB extraction** prototype on Ubuntu.

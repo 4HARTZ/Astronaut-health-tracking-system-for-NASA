@@ -1,0 +1,4 @@
+# Install in a dedicated environment; dependency availability depends on Python/platform.
+numpy>=1.26,<3
+opencv-python>=4.9,<5
+mediapipe>=0.10,<0.11

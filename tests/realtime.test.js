@@ -1,32 +1,56 @@
-import {test,afterEach} from 'node:test';
+import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import {JSDOM} from 'jsdom';
-const dom=new JSDOM('<!doctype html><html><body></body></html>',{url:'http://localhost:8084',pretendToBeVisual:true});
-for(const key of ['window','document','HTMLElement','Node','MutationObserver'])globalThis[key]=dom.window[key];
-Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configurable:true});
-globalThis.IS_REACT_ACT_ENVIRONMENT=true;
-const React=(await import('react')).default;
-const {render,screen,fireEvent,act,cleanup}=await import('@testing-library/react');
-const {default:RealtimeMonitor}=await import('../src/components/RealtimeMonitor.jsx');
-const {useHealthStore}=await import('../src/store/useHealthStore.js');
+import { JSDOM } from 'jsdom';
+const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost:8080' });
+for (const name of ['window','document','HTMLElement','Node','MutationObserver']) globalThis[name] = dom.window[name];
+Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+const React = (await import('react')).default;
+const { render, screen, fireEvent, act, cleanup, within } = await import('@testing-library/react');
+const { default: Monitor } = await import('../src/components/RealtimeMonitor.jsx');
+const { useHealthStore } = await import('../src/store/useHealthStore.js');
 afterEach(cleanup);
-test('browser optical demo is explicit, does not claim camera connection or publish fake vitals',async()=>{
- render(React.createElement(RealtimeMonitor));fireEvent.click(screen.getByRole('button',{name:'Preview optical demo'}));
- assert.ok(screen.getByText('DEMO ACTIVE'));assert.ok(screen.getByText('SIMULATED · NOT MEASURED'));assert.equal(useHealthStore.getState().liveVitals.heartRate,null);assert.equal(useHealthStore.getState().liveVitals.isStreaming,false);
- await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Stop optical demo'}))); assert.ok(screen.getByRole('button',{name:'Preview optical demo'}));
+function bridge() {
+  const listeners = new Map(), calls = [];
+  const emit = (name, payload) => listeners.get(name)?.({ payload });
+  return { listeners, calls, emit, api: {
+    listen: async (name, fn) => { listeners.set(name, fn); return () => listeners.delete(name); },
+    invoke: async name => {
+      calls.push(name);
+      if (name === 'rppg_start') {
+        assert.ok(listeners.has('rppg-status') && listeners.has('rppg-telemetry'));
+        emit('rppg-status', { state: 'active', message: 'Camera opened', simulated: false });
+      }
+    },
+  } };
+}
+test('browser monitor identifies synthetic data and does not pretend to connect a camera', () => {
+  render(React.createElement(Monitor, { isDesktop: false }));
+  assert.equal(screen.getByRole('button', { name: 'Camera requires desktop app' }).disabled, true);
+  assert.ok(screen.getByText('NO SENSOR CONNECTED'));
+  assert.equal(useHealthStore.getState().liveVitals.simulated, true);
 });
-test('native listener is registered before camera start; zero is valid; face loss clears measurements',async()=>{
- let receive,unsubscribed=false;const calls=[];const bridge={listen:async(_name,callback)=>{calls.push('listen');receive=callback;return ()=>{unsubscribed=true;};},invoke:async command=>{calls.push(command);}};
- render(React.createElement(RealtimeMonitor,{bridge}));await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Connect rPPG Feed'})));
- assert.deepEqual(calls,['listen','rppg_start']);assert.ok(screen.getByText('WAITING FOR SAMPLES'));
- await act(async()=>receive({payload:{faceDetected:true,pulseValue:0,estimatedBpm:52,r:102.5,g:105.6,b:111.3,snr:1.85,fps:30}}));
- assert.ok(screen.getByText('CAMERA SAMPLES RECEIVED'));assert.equal(useHealthStore.getState().liveVitals.heartRate,52);assert.equal(useHealthStore.getState().liveVitals.spO2,null);
- await act(async()=>receive({payload:{faceDetected:false}}));assert.ok(screen.getByText('WAITING FOR SAMPLES'));assert.equal(useHealthStore.getState().liveVitals.heartRate,null);assert.equal(useHealthStore.getState().liveVitals.isStreaming,false);
- await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Disconnect rPPG'})));assert.equal(unsubscribed,true);assert.equal(calls.at(-1),'rppg_stop');
+test('camera listeners precede launch; missing faces and process failures clear stale readings', async () => {
+  const b = bridge();
+  const view = render(React.createElement(Monitor, { isDesktop: true, cameraApi: async () => b.api }));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Connect rPPG Feed' })));
+  await act(async () => b.emit('rppg-telemetry', { faceDetected: true, estimatedBpm: 81, pulseValue: 2 }));
+  assert.equal(useHealthStore.getState().liveVitals.heartRate, 81);
+  assert.equal(useHealthStore.getState().liveVitals.spO2, null);
+  await act(async () => b.emit('rppg-telemetry', { faceDetected: false }));
+  assert.equal(useHealthStore.getState().liveVitals.heartRate, null);
+  await act(async () => b.emit('rppg-telemetry', { faceDetected: true, estimatedBpm: 71, simulated: true }));
+  assert.equal(useHealthStore.getState().liveVitals.heartRate, null);
+  await act(async () => b.emit('rppg-status', { state: 'stopped', message: 'Permission denied' }));
+  assert.ok(screen.getByText('Permission denied'));
+  assert.ok(screen.getByRole('button', { name: 'Connect rPPG Feed' }));
+  view.unmount();
+  assert.equal(b.listeners.size, 0);
+  assert.ok(b.calls.includes('rppg_stop'));
 });
-test('missing pulse or BPM never turns into an invented 72 BPM measurement',async()=>{
- let receive;const bridge={listen:async(_name,callback)=>{receive=callback;return ()=>{};},invoke:async()=>{}};
- render(React.createElement(RealtimeMonitor,{bridge}));await act(async()=>fireEvent.click(screen.getByRole('button',{name:'Connect rPPG Feed'})));
- await act(async()=>receive({payload:{faceDetected:true,pulseValue:null,estimatedBpm:72}}));assert.equal(useHealthStore.getState().liveVitals.heartRate,null);
- await act(async()=>receive({payload:{faceDetected:true,pulseValue:1,estimatedBpm:0}}));assert.equal(useHealthStore.getState().liveVitals.heartRate,null);assert.ok(screen.getByText('CAMERA SAMPLES RECEIVED'));
+test('camera startup failure is actionable and never falls back to a fake reading', async () => {
+  render(React.createElement(Monitor, { isDesktop: true, cameraApi: async () => { throw Error('Python not found'); } }));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Connect rPPG Feed' })));
+  assert.ok(screen.getByText(/Camera unavailable: Error: Python not found/));
+  assert.equal(useHealthStore.getState().liveVitals.heartRate, null);
 });

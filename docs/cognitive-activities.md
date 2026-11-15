@@ -1,6 +1,6 @@
 # Cognitive activities — adaptation specification
 
-Interface status: replaced by Space to breathe, an optional breathing guide. This document describes the earlier prototype only. Its code and local storage remain for compatibility; these activities are no longer mounted in the main app. The breathing guide does not collect task or wellbeing results.
+Interface status: Signal Watch and Position Match are available in the browser Cognitive tab. Space to breathe is a separate optional breathing guide and does not collect task or wellbeing results. Cognitive sessions use IndexedDB; the desktop SQLite repository does not implement them, so the desktop tab shows an availability message instead of starting an unsupported session.
 
 Status: **Awaiting medical review**. No reviewer or approval claimed. Task version 1.0.0. Source review: 2026-11-13.
 

@@ -29,7 +29,10 @@ self.addEventListener('fetch', event => {
  if(!navigation&&!urls.includes(url.href))return;
  event.respondWith((async () => {
   const cache=await caches.open(CACHE);
-  const cached=await cache.match(navigation?shell:request);
+  // These are versioned, public app files, identical for every request origin.
+  // Preview servers can send Vary: Origin; module/style requests may carry an
+  // Origin header that the precache download did not, despite the same URL.
+  const cached=await cache.match(navigation?shell:request,{ignoreVary:true});
   return cached||fetch(request);
  })());
 });

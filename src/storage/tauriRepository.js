@@ -1,6 +1,9 @@
 import { sortEntries, valid } from '../health.js';
 
-export async function initializeTauriRepository() {
+export async function initializeTauriRepository(accountId) {
+  if (typeof accountId !== 'string' || !/^(ryan|tharusha|hansaja|apurwa)$/.test(accountId)) {
+    throw new Error('A valid signed-in account is required to open health records.');
+  }
   const { invoke } = await import('@tauri-apps/api/core');
   const listeners = new Set();
 
@@ -15,8 +18,8 @@ export async function initializeTauriRepository() {
   }
 
   async function snapshot() {
-    const rawEntries = await invoke('db_get_entries');
-    const stats = await invoke('db_get_stats');
+    const rawEntries = await invoke('db_get_entries', { accountId });
+    const stats = await invoke('db_get_stats', { accountId });
 
     // Ensure numeric types and null values match frontend expectations
     const entries = sortEntries(rawEntries.map((e) => ({
@@ -48,6 +51,7 @@ export async function initializeTauriRepository() {
   async function save(entry, _expectedRevision = null) {
     if (!valid(entry)) throw Error('Invalid check-in.');
     await invoke('db_save_entry', {
+      accountId,
       entry: {
         ...entry,
         notes: entry.notes || '',
@@ -57,7 +61,7 @@ export async function initializeTauriRepository() {
   }
 
   async function remove(id, _expectedRevision = null) {
-    const removed = await invoke('db_delete_entry', { id });
+    const removed = await invoke('db_delete_entry', { accountId, id });
     if (!removed) throw Error('Record not found or already deleted.');
     notify();
   }
@@ -84,13 +88,13 @@ export async function initializeTauriRepository() {
       stress: e.stress == null ? null : Number(e.stress),
     }));
 
-    const result = await invoke('db_import_backup', { entries: cleanList });
+    const result = await invoke('db_import_backup', { accountId, entries: cleanList });
     notify();
     return result;
   }
 
   async function getStats() {
-    return invoke('db_get_stats');
+    return invoke('db_get_stats', { accountId });
   }
 
   async function getSystemInfo() {
@@ -98,7 +102,7 @@ export async function initializeTauriRepository() {
   }
 
   return {
-    workspace: 'sqlite-local',
+    workspace: `sqlite-${accountId}`,
     isTauri: true,
     snapshot,
     save,

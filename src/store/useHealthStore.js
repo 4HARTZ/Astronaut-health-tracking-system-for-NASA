@@ -94,7 +94,4 @@ export const useHealthStore = create((set, get) => ({
     };
   }),
 
-  // Feature 6: Offline AI Fatigue Forecast State
-  alertnessIndex: 91,
-  setAlertnessIndex: (val) => set({ alertnessIndex: val }),
 }));
